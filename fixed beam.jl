@@ -5,7 +5,7 @@ import ApproxOperator.Beam: ∫δdᵘKᵍᵘᵘdᵘds, ∫δdᵘKᵍᵘᵠdᵠds
 import ApproxOperator.Elasticity: ∫vᵢbᵢdΩ, ∫vᵢtᵢdΓ
 import Gmsh: gmsh
 using LinearAlgebra
-using WriteVTK
+using Printf
 
 # ===================== 1. 材料与截面参数 =====================
 const E   = 2.1e11        # 弹性模量
@@ -100,57 +100,59 @@ f[3𝐼ₘ-1] = P
 f .+= fα
 d₂ = 𝐤ᵦ \ f
 
-# ===================== 7. 结果与解析解对照 =====================
-v均布解析 = q*L^4/(384*E*Iyy) + q*L^2/(8*k₃*G*A)
-v集中解析 = P*L^3/(192*E*Iyy) + P*L/(4*k₃*G*A)
+# ===================== 7. 全梁精确解与逐节点对照 =====================
+# 梁沿整体 X，局部 y = 整体 Z、局部 z = −整体 Y（3D.md 7.2），所以整体 Y 向
+# 弯曲由 EIyy 与 k₃GA 控制，对应的截面转角是整体 φ₃。取 x ∈ [0, L]，
+# q、P 为整体 Y 向荷载（向下为负）。其余分量恒为零：u₁ = u₃ = φ₁ = φ₂ = 0。
 
-println("\n跨中挠度（节点 𝐼 = ", 𝐼ₘ, "，x = ", nodes[𝐼ₘ].x, "）")
-println("均布荷载 q : FE = ", d₁[3𝐼ₘ-1], "  解析 = ", v均布解析,
-        "  相对误差 = ", abs(d₁[3𝐼ₘ-1] - v均布解析)/abs(v均布解析))
-println("集中力 P   : FE = ", d₂[3𝐼ₘ-1], "  解析 = ", v集中解析,
-        "  相对误差 = ", abs(d₂[3𝐼ₘ-1] - v集中解析)/abs(v集中解析))
+# --- 算例 1：两端固定，均布荷载 q（Timoshenko 梁，弯曲 + 剪切）---
+#   弯曲挠度  w_b(x) = q x²(L−x)²/(24EIyy)
+#   剪切挠度  w_s(x) = q x(L−x)/(2k₃GA)
+#   截面转角  φ(x)   = w_b′(x) = q x(L−x)(L−2x)/(12EIyy)
+w均布(x) = q*x^2*(L-x)^2/(24*E*Iyy) + q*x*(L-x)/(2*k₃*G*A)
+φ均布(x) = q*x*(L-x)*(L-2*x)/(12*E*Iyy)
 
-# 解写回节点（分块排列 ⇒ 每个节点 6 个分量），便于后续 VTK / 误差统计
-push!(nodes,
-      :u₁=>[d₂[3i-2] for i in 1:nₚ], :u₂=>[d₂[3i-1] for i in 1:nₚ], :u₃=>[d₂[3i] for i in 1:nₚ],
-      :φ₁=>[d₂[nᵤ+3i-2] for i in 1:nₚ], :φ₂=>[d₂[nᵤ+3i-1] for i in 1:nₚ], :φ₃=>[d₂[nᵤ+3i] for i in 1:nₚ])
+# --- 算例 2：两端固定，跨中集中力 P（Timoshenko 梁，弯曲 + 剪切）---
+#   0 ≤ x ≤ L/2：w_b = P x²(3L−4x)/(48EIyy)，w_s = P x/(2k₃GA)
+#                φ   = w_b′ = P x(L−2x)/(8EIyy)
+#   L/2 ≤ x ≤ L：由对称性 w(x) = w(L−x)，φ(x) = P(L−x)(L−2x)/(8EIyy)，
+#                w_b = P(L−x)²(4x−L)/(48EIyy)，w_s = P(L−x)/(2k₃GA)
+w集中(x) = x ≤ L/2 ? P*x^2*(3L-4*x)/(48*E*Iyy) + P*x/(2*k₃*G*A) :
+                     P*(L-x)^2*(4*x-L)/(48*E*Iyy) + P*(L-x)/(2*k₃*G*A)
+φ集中(x) = x ≤ L/2 ? P*x*(L-2*x)/(8*E*Iyy) : P*(L-x)*(L-2*x)/(8*E*Iyy)
 
-# ===================== 8. VTK 输出（CFSM/vtk/，WriteVTK）=====================
-# 梁单元 → VTK_LINE；节点数据含 displacement / rotation / u₂
-#   变形形状用 ParaView 的 Warp By Vector（Scale Factor 取 ~1e5）
-function writevtkbeam(file, nodes, elements, d, nᵤ)
-    mkpath(dirname(file))
-    nₚ = length(nodes)
-    x = [p.x for p in nodes]
-    y = [p.y for p in nodes]
-    z = [p.z for p in nodes]
-    # WriteVTK 的节点编号从 1 开始，与 gmsh 的 𝐼 一致
-    cells = [MeshCell(VTKCellTypes.VTK_LINE, (el.𝓒[1].𝐼, el.𝓒[2].𝐼)) for el in elements]
-    u = zeros(3, nₚ)
-    φ = zeros(3, nₚ)
-    for i in 1:nₚ
-        u[:, i] = d[3i-2:3i]              # 整体 u₁, u₂, u₃
-        φ[:, i] = d[nᵤ+3i-2:nᵤ+3i]        # 整体 φ₁, φ₂, φ₃
+# --- 有限元解（u₂、φ₃）与精确解在全梁所有节点上的对比 ---
+𝑥    = [nodes[i].x for i in 1:nₚ]
+次序 = sortperm(𝑥)
+
+wᶠ¹ = [d₁[3i-1]      for i in 1:nₚ]      # 均布荷载：FE 位移
+φᶠ¹ = [d₁[nᵤ+3i]     for i in 1:nₚ]      # 均布荷载：FE 转角
+wᵉ¹ = w均布.(𝑥)
+φᵉ¹ = φ均布.(𝑥)
+
+wᶠ² = [d₂[3i-1]      for i in 1:nₚ]      # 集中力：FE 位移
+φᶠ² = [d₂[nᵤ+3i]     for i in 1:nₚ]      # 集中力：FE 转角
+wᵉ² = w集中.(𝑥)
+φᵉ² = φ集中.(𝑥)
+
+function 打印对比(标题, 𝑥, 次序, wᶠ, wᵉ, φᶠ, φᵉ)
+    println("\n", 标题)
+    println("      x          w_FE          w_exact       |Δw|          φ_FE          φ_exact       |Δφ|")
+    for k in 次序
+        @printf("%9.4f  %13.6e  %13.6e  %10.3e  %13.6e  %13.6e  %10.3e\n",
+                𝑥[k], wᶠ[k], wᵉ[k], abs(wᶠ[k]-wᵉ[k]),
+                φᶠ[k], φᵉ[k], abs(φᶠ[k]-φᵉ[k]))
     end
-    files = vtk_grid(file, x, y, z, cells) do vtk
-        vtk["displacement"] = u           # 3×nₚ 矩阵 ⇒ 节点向量场
-        vtk["rotation"]     = φ
-        vtk["u2"]           = u[2, :]     # 标量场，便于直接着色
-    end
-    println("VTK 已写出: ", join(files, ", "))
+    # 端点处精确解为 0，故相对误差以精确解的最大幅值为基准
+    𝑒ʷ = maximum(abs.(wᶠ .- wᵉ))/maximum(abs.(wᵉ))
+    𝑒ᵠ = maximum(abs.(φᶠ .- φᵉ))/maximum(abs.(φᵉ))
+    @printf("全梁最大相对误差：w %.3e，φ %.3e\n", 𝑒ʷ, 𝑒ᵠ)
 end
 
-vtkdir = joinpath(@__DIR__, "vtk")
-writevtkbeam(joinpath(vtkdir, "fixed_beam_uniform"), nodes, elements, d₁, nᵤ)
-writevtkbeam(joinpath(vtkdir, "fixed_beam_point"),   nodes, elements, d₂, nᵤ)
+打印对比("=== 算例 1：均布荷载 q = $q N/m ===", 𝑥, 次序, wᶠ¹, wᵉ¹, φᶠ¹, φᵉ¹)
+打印对比("=== 算例 2：跨中集中力 P = $P N ===", 𝑥, 次序, wᶠ², wᵉ², φᶠ², φᵉ²)
 
-# ===================== 9. 备用：端部集中力 / 集中力矩 =====================
-# 端部集中力（例如把 Γ² 改成自由端后在该端加力）：Poi1 单元的 𝑤 = 1，可直接用 Elasticity 的算子
-#   els_Γ² = getElements(nodes, entities["Γ²"])
-#   set𝝭!(els_Γ²)
-#   prescribe!(els_Γ², :t₁=>0.0, :t₂=>P, :t₃=>0.0)
-#   (∫vᵢtᵢdΓ=>els_Γ²)(f)         # f[3I-2..3I] += tᵢ（局部量先乘 Rᵀ 转成整体）
-# 端部集中力矩没有现成算子（∫vᵢtᵢdΓ 只写 3I-2..3I 三个平动自由度），直接写自由度即可：
-#   f[nᵤ+3I-2] = M₁   f[nᵤ+3I-1] = M₂   f[nᵤ+3I] = M₃
+# 解写回节点（分块排列 ⇒ 每个节点 6 个分量），便于后续 VTK / 误差统计
+push!(nodes, :u₁=>[d₂[3i-2] for i in 1:nₚ], :u₂=>[d₂[3i-1] for i in 1:nₚ], :u₃=>[d₂[3i] for i in 1:nₚ],:φ₁=>[d₂[nᵤ+3i-2] for i in 1:nₚ], :φ₂=>[d₂[nᵤ+3i-1] for i in 1:nₚ], :φ₃=>[d₂[nᵤ+3i] for i in 1:nₚ])
 
 gmsh.finalize()
