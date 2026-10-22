@@ -1,0 +1,35 @@
+# LaTeX 编译中间文件
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+*.bbl
+*.blg
+*.run.xml
+*.blx.bib
+*.idx
+*.ind
+*.ilg
+
+# 生成的 PDF（如需要保留主 PDF 预览，可注释下一行）
+#*.pdf
+
+# macOS 系统文件
+.DS_Store
+
+# 编辑器/IDE 配置
+.vscode/
+.idea/
+*.swp
+*.bak
+*~
+
+# 临时目录
+build/
+tmp/
+.aux/

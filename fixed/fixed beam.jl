@@ -29,8 +29,8 @@ const P = -1.0e3          # 跨中集中力 N
 
 # ===================== 2. 读入 / 生成网格 =====================
 const integrationorder = 1        # Seg2 取 1 点高斯（减缩积分，避免剪切自锁，见 3D.md 注）
-const geo = joinpath(@__DIR__, "beam.geo")
-const msh = joinpath(@__DIR__, "beam.msh")
+const geo = "msh/beam.geo"
+const msh = "msh/beam.msh"
 
 gmsh.initialize()
 if isfile(msh)

@@ -17,59 +17,49 @@ const Iyz = 0.0
 const k₂  = 5/6
 const k₃  = 5/6
 
-# ===================== 2. 分片试验的线性场 =====================
-# 分片试验的精确解必须落在有限元插值空间内。Seg2 单元每个节点 3 个位移
-# + 3 个转角，位移与转角都线性插值，因此取如下线性场：
+# ===================== 2. 分片试验的线性场（沿 Y 的梁）=====================
+# 沿 Y 的梁在 beam.jl 的 𝐑 下：eₓ = Y，e_y = Z，e_z = X。
+# 局部分量与整体分量的对应关系：
+#   u₁ˡ = u₂,  u₂ˡ = u₃,  u₃ˡ = u₁
+#   φ₁ˡ = φ₂,  φ₂ˡ = φ₃,  φ₃ˡ = φ₁
 #
-#   u₁ = ε₀ x,        u₂ = c₂ + θ_z x,   u₃ = c₃ − θ_y x
-#   φ₁ = κ₁₀ x,       φ₂ = θ_y,          φ₃ = θ_z
-# 其中所有系数取 1.0e-3。
+# 局部线性场（s 为沿梁轴的局部坐标，这里 s = y）：
+#   u₁ˡ = ε₀ y,       u₂ˡ = c₂ + θ_z y,  u₃ˡ = c₃ − θ_y y
+#   φ₁ˡ = κ₁₀ y,      φ₂ˡ = θ_y,         φ₃ˡ = θ_z
 #
-# 广义应变：ε₁₁ = ε₀，κ₁ = κ₁₀，γ₂ = u₂,₁ − φ₃ = 0，γ₃ = u₃,₁ + φ₂ = 0，
-#           κ₂ = κ₃ = 0，全部为常数。
+# 由 dᵍ = Rᵀ dˡ 转换到整体分量，得到本文件使用的线性场：
+#   u₁ = c₃ − θ_y y,  u₂ = ε₀ y,         u₃ = c₂ + θ_z y
+#   φ₁ = θ_z,         φ₂ = κ₁₀ y,        φ₃ = θ_y
 #
-# 与 sample.jl（Mindlin 板）一样，精确场写成 (x,y,z) 的函数，边界罚项直接
-# 在积分点调用函数取值，而不是手工代入端点坐标。
+# 广义应变全为常数：ε₁₁ = ε₀，κ₁ = κ₁₀，γ₂ = u₃,₁ − φ₁ = 0，
+# γ₃ = u₁,₁ + φ₃ = 0，κ₂ = κ₃ = 0；因此 b₁ = b₂ = b₃ ≡ 0，
+# 分片试验不需要外荷载项（只有端部反力）。
 #
-# 关于分布荷载：sample.jl 由精确场反算 q、m₁、m₂ 后施加。本梁格式中
-#   N = EA ε₁₁，Q₂ = k₃GA γ₂，Q₃ = k₂GA γ₃，M₂ = EIyy κ₂，M₃ = EIzz κ₃，
-# 常应变 ⇒ N′ = 0、M₂、M₃ 为常数；无分布力偶时平衡要求 Q₂ = Q₃ = 0，
-# 因此 b₁ = b₂ = b₃ ≡ 0，分片试验不需要外荷载项（只有端部反力）。
-#
-# 注：常曲率状态（φ₃ 线性、挠度 u₂ 二次）不在 Seg2 线性插值空间内
-#     （Seg2 的 u₂、φ₃ 都只有线性形函数），不能作为严格分片试验的精确解；
-#     弯曲刚度由 fixed beam.jl 的整梁收敛对比验证。
-# 精确场只随 x 变化（φ₂、φ₃ 甚至与坐标无关），y、z 形参在函数体中用不到；
-# 保留 (x,y,z) 是为了与 prescribe! 的调用方式 f(ξ.x, ξ.y, ξ.z) 对应。
-# 系数统一取 1.0e-3：小变形量级；分片试验是线性问题，幅值只按比例缩放结果，
-# 不影响相对误差。
-u₁(x, y, z) = 1.0e-3*x
-u₂(x, y, z) = 1.0e-3 + 1.0e-3*x
-u₃(x, y, z) = 1.0e-3 - 1.0e-3*x
-φ₁(x, y, z) = 1.0e-3*x
-φ₂(x, y, z) = 1.0e-3
+# 注：常曲率状态（φ 线性、挠度二次）不在 Seg2 线性插值空间内，
+#     不能作为严格分片试验的精确解；弯曲刚度由 fixed beam.jl 验证。
+# 系数统一取 1.0e-3（小变形量级；线性问题，幅值只按比例缩放结果）。
+u₁(x, y, z) = 1.0e-3 - 1.0e-3*y
+u₂(x, y, z) = 1.0e-3*y
+u₃(x, y, z) = 1.0e-3 + 1.0e-3*y
+φ₁(x, y, z) = 1.0e-3
+φ₂(x, y, z) = 1.0e-3*y
 φ₃(x, y, z) = 1.0e-3
 
 精确值(x, y, z) = [u₁(x,y,z), u₂(x,y,z), u₃(x,y,z),
                   φ₁(x,y,z), φ₂(x,y,z), φ₃(x,y,z)]
 
-# ===================== 3. 读入网格（与 fixed beam.jl 同一套分片）=====================
+# ===================== 3. 读入网格（沿 Y 的梁）=====================
 const integrationorder = 1
-const geo = joinpath(@__DIR__, "beam.geo")
-const msh = joinpath(@__DIR__, "beam.msh")
+const msh = "msh/beamY.msh"
 
 gmsh.initialize()
-if isfile(msh)
-    gmsh.open(msh)
-else
-    gmsh.open(geo)
-end
+isfile(msh) || error("找不到网格文件：$msh")
+gmsh.open(msh)
 
 entities = getPhysicalGroups()
 nodes    = get𝑿ᵢ()
 nₚ       = length(nodes)
 nᵤ       = 3nₚ
-L        = maximum(nodes.x)
 
 elements = getElements(nodes, entities["Ω"], integrationorder)
 println("分片：节点 ", nₚ, " 个，梁单元 ", length(elements), " 个")
@@ -121,19 +111,19 @@ push!(nodes,
 𝐝(i)  = vcat(d[3i-2:3i], d[nᵤ+3i-2:nᵤ+3i])
 𝐝ᵉ(i) = 精确值(nodes[i].x, nodes[i].y, nodes[i].z)
 
-𝑥     = [nodes[i].x for i in 1:nₚ]
-次序  = sortperm(𝑥)
+𝑦     = [nodes[i].y for i in 1:nₚ]
+次序  = sortperm(𝑦)
 端点  = [次序[1], 次序[end]]
 内部  = setdiff(次序, 端点)
 
 Δ = [𝐝(i) .- 𝐝ᵉ(i) for i in 1:nₚ]
 场幅值 = maximum(abs.(vcat([𝐝ᵉ(i) for i in 1:nₚ]...)))
 
-println("\n=== 分片试验：线性场（刚体运动 + 常轴向应变 + 常扭转）===")
-println("      x        max_c|Δd_c|   (c = u₁,u₂,u₃,φ₁,φ₂,φ₃)")
+println("\n=== 分片试验：沿 Y 方向的梁 ===")
+println("      y        max_c|Δd_c|   (c = u₁,u₂,u₃,φ₁,φ₂,φ₃)")
 for k in 次序
     标记 = k ∈ 端点 ? "  (端部，罚约束)" : ""
-    @printf("%9.4f   %12.3e%s\n", 𝑥[k], maximum(abs.(Δ[k])), 标记)
+    @printf("%9.4f   %12.3e%s\n", 𝑦[k], maximum(abs.(Δ[k])), 标记)
 end
 
 分量名 = ("u₁", "u₂", "u₃", "φ₁", "φ₂", "φ₃")
