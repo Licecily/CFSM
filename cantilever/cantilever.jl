@@ -1,6 +1,6 @@
 using ApproxOperator
 import ApproxOperator.GmshImport: getPhysicalGroups, get𝑿ᵢ, getElements
-import ApproxOperator.Beam: ∫δdᵘKᵍᵘᵘdᵘds, ∫δdᵘKᵍᵘᵠdᵠds, ∫δdᵠKᵍᵠᵠdᵠds, ∫δdᵢgᵢdΓ, L₂d
+import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, ∫dᵢgᵢdΓ, L₂d
 import ApproxOperator.Elasticity: ∫vᵢbᵢdΩ, ∫vᵢtᵢdΓ
 import Gmsh: gmsh
 using LinearAlgebra
@@ -45,13 +45,19 @@ prescribe!(elements, :E=>E, :G=>G, :A=>A, :Iy=>Iy, :Iz=>Iz,
 set∇𝝭!(elements)
 
 # ===================== 4. 装配整体刚度矩阵 K =====================
-𝐤 = zeros(6nₚ, 6nₚ)
-𝑎₁ = ∫δdᵘKᵍᵘᵘdᵘds => elements
-𝑎₂ = ∫δdᵘKᵍᵘᵠdᵠds => elements
-𝑎₃ = ∫δdᵠKᵍᵠᵠdᵠds => elements
-𝑎₁(𝐤)
-𝑎₂(𝐤)
-𝑎₃(𝐤)
+𝐊ᵘᵘ = zeros(3nₚ, 3nₚ)
+𝐊ᵘᵠ = zeros(3nₚ, 3nₚ)
+𝐊ᵠᵘ = zeros(3nₚ, 3nₚ)
+𝐊ᵠᵠ = zeros(3nₚ, 3nₚ)
+𝑎₁ = ∫εᵘNᵘdΩ => elements
+𝑎₂ = ∫εᵘNᵠdΩ => elements
+𝑎₃ = ∫εᵠNᵘdΩ => elements
+𝑎₄ = ∫εᵠNᵠdΩ => elements
+𝑎₁(𝐊ᵘᵘ)
+𝑎₂(𝐊ᵘᵠ)
+𝑎₃(𝐊ᵠᵘ)
+𝑎₄(𝐊ᵠᵠ)
+𝐤 = [𝐊ᵘᵘ 𝐊ᵘᵠ; 𝐊ᵠᵘ 𝐊ᵠᵠ]
 
 # ===================== 5. 边界条件：仅 Γ¹ 固定（罚函数）=====================
 # Γ² 自由端不约束；固定端 6 个自由度全部约束。
@@ -63,7 +69,7 @@ prescribe!(elements_Γ¹, :α=>α,
                          :g₁=>0.0, :g₂=>0.0, :g₃=>0.0,
                          :g₄=>0.0, :g₅=>0.0, :g₆=>0.0)
 set𝝭!(elements_Γ¹)
-𝑏₂¹ = ∫δdᵢgᵢdΓ => elements_Γ¹
+𝑏₂¹ = ∫dᵢgᵢdΓ => elements_Γ¹
 
 𝐤ᵦ = copy(𝐤)
 fα = zeros(6nₚ)

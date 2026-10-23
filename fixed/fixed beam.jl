@@ -1,7 +1,7 @@
 
 using ApproxOperator
 import ApproxOperator.GmshImport: getPhysicalGroups, get𝑿ᵢ, getElements
-import ApproxOperator.Beam: ∫δdᵘKᵍᵘᵘdᵘds, ∫δdᵘKᵍᵘᵠdᵠds, ∫δdᵠKᵍᵠᵠdᵠds, ∫δdᵢgᵢdΓ
+import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, ∫dᵢgᵢdΓ
 import ApproxOperator.Elasticity: ∫vᵢbᵢdΩ, ∫vᵢtᵢdΓ
 import Gmsh: gmsh
 using LinearAlgebra
@@ -53,13 +53,19 @@ prescribe!(elements, :E=>E, :G=>G, :A=>A, :Iy=>Iy, :Iz=>Iz,:Iyy=>Iyy, :Izz=>Izz,
 set∇𝝭!(elements)          # 同时备好 𝝭 与 ∂𝝭∂x
 
 # ===================== 4. 装配整体刚度矩阵 K（3D.md 第 5、7、8 节）=====================
-𝐤 = zeros(6nₚ, 6nₚ)
-𝑎₁ = ∫δdᵘKᵍᵘᵘdᵘds => elements        # Kᵘᵘ
-𝑎₂ = ∫δdᵘKᵍᵘᵠdᵠds => elements        # Kᵘᵠ（同时装配左下角转置块 Kᵠᵘ）
-𝑎₃ = ∫δdᵠKᵍᵠᵠdᵠds => elements        # Kᵠᵠ
-𝑎₁(𝐤)
-𝑎₂(𝐤)
-𝑎₃(𝐤)
+𝐊ᵘᵘ = zeros(3nₚ, 3nₚ)
+𝐊ᵘᵠ = zeros(3nₚ, 3nₚ)
+𝐊ᵠᵘ = zeros(3nₚ, 3nₚ)
+𝐊ᵠᵠ = zeros(3nₚ, 3nₚ)
+𝑎₁ = ∫εᵘNᵘdΩ => elements
+𝑎₂ = ∫εᵘNᵠdΩ => elements
+𝑎₃ = ∫εᵠNᵘdΩ => elements
+𝑎₄ = ∫εᵠNᵠdΩ => elements
+𝑎₁(𝐊ᵘᵘ)
+𝑎₂(𝐊ᵘᵠ)
+𝑎₃(𝐊ᵠᵘ)
+𝑎₄(𝐊ᵠᵠ)
+𝐤 = [𝐊ᵘᵘ 𝐊ᵘᵠ; 𝐊ᵠᵘ 𝐊ᵠᵠ]
 
 # ===================== 5. 边界条件：Γ¹、Γ² 两端固定（罚函数）=====================
 # 罚项：∫δdᵢ α (gᵢ − dᵢ) dΓ → 对角刚度 += α NᵢNⱼ，右端项 += α Nᵢ gᵢ（Poi1 单元 N=1、𝑤=1）
@@ -70,12 +76,12 @@ const α = 1.0e13
 elements_Γ¹ = getElements(nodes, entities["Γ¹"])        # entities[name] 本身就是 dim => tags
 prescribe!(elements_Γ¹, :α=>α,:g₁=>0.0, :g₂=>0.0, :g₃=>0.0,:g₄=>0.0, :g₅=>0.0, :g₆=>0.0)  
 set𝝭!(elements_Γ¹)
-𝑏₂¹ = ∫δdᵢgᵢdΓ => elements_Γ¹
+𝑏₂¹ = ∫dᵢgᵢdΓ => elements_Γ¹
 
 elements_Γ² = getElements(nodes, entities["Γ²"])
 prescribe!(elements_Γ², :α=>α,:g₁=>0.0, :g₂=>0.0, :g₃=>0.0,:g₄=>0.0, :g₅=>0.0, :g₆=>0.0)
 set𝝭!(elements_Γ²)
-𝑏₂² = ∫δdᵢgᵢdΓ => elements_Γ²
+𝑏₂² = ∫dᵢgᵢdΓ => elements_Γ²
 
 𝐤ᵦ = copy(𝐤)                       # 加罚项后的刚度矩阵（保留原 𝐤 备用）
 fα = zeros(6nₚ)                    # 罚项对右端项的贡献（齐次固定端时为 0）

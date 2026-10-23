@@ -553,11 +553,25 @@ $N_IN_J$ 的形式出现，是 Timoshenko 梁刚度矩阵区别于 Euler--Bernou
 
 \subsection{刚度矩阵与程序算子的对应}
 
-理论推导得到的三个刚度子块，在 ApproxOperator.jl 的 Beam 模块中都有对应的算子。
-算子采用 $\int\delta d\,K\,d\,ds$ 的命名形式，其中上标 $u$、$\varphi$ 分别表示位移块与
-转角块，上标 $g$ 表示该算子已完成 $\bR^{\mathsf T}\bK\bR$ 的整体化；不带 $g$ 的版本
-（例如 $\int\delta d^{u}K^{uu}d^{u}ds$）对应 $\bR=\mathbf{I}_3$ 的局部形式。
-具体对应关系见表~\ref{tab:operators}。
+理论推导得到的四个刚度块，在 ApproxOperator.jl 的 Beam 模块中都有对应的算子。
+算子命名与 thin\_shell.jl 的 $\int\varepsilon_{ij}N_{ij}\,d\Omega$ 风格一致，
+用广义应变与广义内力表示：
+\begin{equation}
+\int\varepsilon^{u}N^{u}\,d\Omega,\quad
+\int\varepsilon^{u}N^{\varphi}\,d\Omega,\quad
+\int\varepsilon^{\varphi}N^{u}\,d\Omega,\quad
+\int\varepsilon^{\varphi}N^{\varphi}\,d\Omega,
+\end{equation}
+其中上标 $u$、$\varphi$ 表示该块对应的自由度块（位移块或转角块），
+不是某个具体的应变分量。每个算子只装配一个 $3n_p\times3n_p$ 的子块，
+整体刚度矩阵由算例按
+\begin{equation}
+\bK=\begin{bmatrix}
+\bK^{uu} & \bK^{u\varphi}\\
+\bK^{\varphi u} & \bK^{\varphi\varphi}
+\end{bmatrix}
+\end{equation}
+拼装。具体对应关系见表~\ref{tab:operators}。
 
 \begin{table}[H]
 \centering
@@ -567,11 +581,10 @@ $N_IN_J$ 的形式出现，是 Timoshenko 梁刚度矩阵区别于 Euler--Bernou
 \toprule
 理论量 & 程序中对应的算子 & 说明\\
 \midrule
-$\bK^{uu}$ & $\int\delta d^{u}K^{g,uu}d^{u}ds$ & 轴向刚度与两个方向的剪切刚度\\
-$\bK^{u\varphi}$、$\bK^{\varphi u}$ & $\int\delta d^{u}K^{g,u\varphi}d^{\varphi}ds$
-& 位移--转角耦合，同时装配右上块与左下转置块\\
-$\bK^{\varphi\varphi}$ & $\int\delta d^{\varphi}K^{g,\varphi\varphi}d^{\varphi}ds$
-& 扭转、弯曲与剪切柔度\\
+$\bK^{uu}$ & $\int\varepsilon^{u}N^{u}d\Omega$ & 轴向刚度与两个方向的剪切刚度\\
+$\bK^{u\varphi}$ & $\int\varepsilon^{u}N^{\varphi}d\Omega$ & 位移--转角耦合（行 $u$，列 $\varphi$）\\
+$\bK^{\varphi u}$ & $\int\varepsilon^{\varphi}N^{u}d\Omega$ & $\bK^{u\varphi}$ 的转置（行 $\varphi$，列 $u$）\\
+$\bK^{\varphi\varphi}$ & $\int\varepsilon^{\varphi}N^{\varphi}d\Omega$ & 扭转、弯曲与剪切柔度\\
 \bottomrule
 \end{tabular}
 \end{table}

@@ -1,6 +1,6 @@
 using ApproxOperator
 import ApproxOperator.GmshImport: getPhysicalGroups, get𝑿ᵢ, getElements
-import ApproxOperator.Beam: ∫δdᵘKᵍᵘᵘdᵘds, ∫δdᵘKᵍᵘᵠdᵠds, ∫δdᵠKᵍᵠᵠdᵠds, ∫δdᵢgᵢdΓ, L₂d
+import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, ∫dᵢgᵢdΓ, L₂d
 import Gmsh: gmsh
 using LinearAlgebra
 using Printf
@@ -75,13 +75,19 @@ prescribe!(elements, :E=>E, :G=>G, :A=>A, :Iy=>Iy, :Iz=>Iz,
                      :Iyy=>Iyy, :Izz=>Izz, :Iyz=>Iyz, :k₂=>k₂, :k₃=>k₃)
 set∇𝝭!(elements)
 
-𝐤 = zeros(6nₚ, 6nₚ)
-𝑎₁ = ∫δdᵘKᵍᵘᵘdᵘds => elements
-𝑎₂ = ∫δdᵘKᵍᵘᵠdᵠds => elements
-𝑎₃ = ∫δdᵠKᵍᵠᵠdᵠds => elements
-𝑎₁(𝐤)
-𝑎₂(𝐤)
-𝑎₃(𝐤)
+𝐊ᵘᵘ = zeros(3nₚ, 3nₚ)
+𝐊ᵘᵠ = zeros(3nₚ, 3nₚ)
+𝐊ᵠᵘ = zeros(3nₚ, 3nₚ)
+𝐊ᵠᵠ = zeros(3nₚ, 3nₚ)
+𝑎₁ = ∫εᵘNᵘdΩ => elements
+𝑎₂ = ∫εᵘNᵠdΩ => elements
+𝑎₃ = ∫εᵠNᵘdΩ => elements
+𝑎₄ = ∫εᵠNᵠdΩ => elements
+𝑎₁(𝐊ᵘᵘ)
+𝑎₂(𝐊ᵘᵠ)
+𝑎₃(𝐊ᵠᵘ)
+𝑎₄(𝐊ᵠᵠ)
+𝐤 = [𝐊ᵘᵘ 𝐊ᵘᵠ; 𝐊ᵠᵘ 𝐊ᵠᵠ]
 
 # ===================== 5. 边界施加精确场（罚函数）=====================
 # 与 sample.jl 的 ∫αwwdΓ、∫αφφdΓ 相同：直接传精确场函数，由算子在各积分点取值。
@@ -92,13 +98,13 @@ elements_Γ¹ = getElements(nodes, entities["Γ¹"])
 prescribe!(elements_Γ¹, :α=>α,
            :g₁=>u₁, :g₂=>u₂, :g₃=>u₃, :g₄=>φ₁, :g₅=>φ₂, :g₆=>φ₃)
 set𝝭!(elements_Γ¹)
-𝑏¹ = ∫δdᵢgᵢdΓ => elements_Γ¹
+𝑏¹ = ∫dᵢgᵢdΓ => elements_Γ¹
 
 elements_Γ² = getElements(nodes, entities["Γ²"])
 prescribe!(elements_Γ², :α=>α,
            :g₁=>u₁, :g₂=>u₂, :g₃=>u₃, :g₄=>φ₁, :g₅=>φ₂, :g₆=>φ₃)
 set𝝭!(elements_Γ²)
-𝑏² = ∫δdᵢgᵢdΓ => elements_Γ²
+𝑏² = ∫dᵢgᵢdΓ => elements_Γ²
 
 # 无分布荷载，右端项只有罚项贡献 α N_I g_I
 𝐤ᵦ = copy(𝐤)

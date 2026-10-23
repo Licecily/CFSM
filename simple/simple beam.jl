@@ -1,6 +1,6 @@
 using ApproxOperator
 import ApproxOperator.GmshImport: getPhysicalGroups, get𝑿ᵢ, getElements
-import ApproxOperator.Beam: ∫δdᵘKᵍᵘᵘdᵘds, ∫δdᵘKᵍᵘᵠdᵠds, ∫δdᵠKᵍᵠᵠdᵠds, L₂d
+import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, L₂d
 import ApproxOperator.Elasticity: ∫vᵢbᵢdΩ
 import Gmsh: gmsh
 using LinearAlgebra
@@ -48,13 +48,19 @@ prescribe!(elements, :E=>E, :G=>G, :A=>A, :Iy=>Iy, :Iz=>Iz,
 set∇𝝭!(elements)
 
 # ===================== 4. 装配整体刚度矩阵 K =====================
-𝐤 = zeros(6nₚ, 6nₚ)
-𝑎₁ = ∫δdᵘKᵍᵘᵘdᵘds => elements        # Kᵘᵘ
-𝑎₂ = ∫δdᵘKᵍᵘᵠdᵠds => elements        # Kᵘᵠ（同时装配左下角转置块）
-𝑎₃ = ∫δdᵠKᵍᵠᵠdᵠds => elements        # Kᵠᵠ
-𝑎₁(𝐤)
-𝑎₂(𝐤)
-𝑎₃(𝐤)
+𝐊ᵘᵘ = zeros(3nₚ, 3nₚ)
+𝐊ᵘᵠ = zeros(3nₚ, 3nₚ)
+𝐊ᵠᵘ = zeros(3nₚ, 3nₚ)
+𝐊ᵠᵠ = zeros(3nₚ, 3nₚ)
+𝑎₁ = ∫εᵘNᵘdΩ => elements
+𝑎₂ = ∫εᵘNᵠdΩ => elements
+𝑎₃ = ∫εᵠNᵘdΩ => elements
+𝑎₄ = ∫εᵠNᵠdΩ => elements
+𝑎₁(𝐊ᵘᵘ)
+𝑎₂(𝐊ᵘᵠ)
+𝑎₃(𝐊ᵠᵘ)
+𝑎₄(𝐊ᵠᵠ)
+𝐤 = [𝐊ᵘᵘ 𝐊ᵘᵠ; 𝐊ᵠᵘ 𝐊ᵠᵠ]
 
 # ===================== 5. 简支边界（罚函数）=====================
 # 简支梁：Γ¹ 铰支座，Γ² 滚动支座。
@@ -64,7 +70,7 @@ set∇𝝭!(elements)
 # 弯曲转角 φ₂、φ₃ 不约束 ⇒ 端部弯矩为零，这正是"简支"。
 # 本算例荷载只有整体 Y 向分量，u₃、φ₂ 的响应恒为零。
 #
-# 只约束部分自由度，不能直接用 ∫δdᵢgᵢdΓ（该算子一次约束全部 6 个分量）；
+# 只约束部分自由度，不能直接用 ∫dᵢgᵢdΓ（该算子一次约束全部 6 个分量）；
 # 对单节点的 Poi1 罚项，N = 1、𝑤 = 1，齐次约束 g = 0 时等价于在对应
 # 自由度对角线上加 α。这里直接按自由度编号加罚。
 const α = 1.0e15

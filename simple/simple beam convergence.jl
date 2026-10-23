@@ -1,6 +1,6 @@
 using ApproxOperator
 import ApproxOperator.GmshImport: getPhysicalGroups, get𝑿ᵢ, getElements
-import ApproxOperator.Beam: ∫δdᵘKᵍᵘᵘdᵘds, ∫δdᵘKᵍᵘᵠdᵠds, ∫δdᵠKᵍᵠᵠdᵠds, L₂d
+import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, L₂d
 import ApproxOperator.Elasticity: ∫vᵢbᵢdΩ
 import Gmsh: gmsh
 using LinearAlgebra
@@ -63,13 +63,19 @@ function 算一个网格(n)
                          :Iyy=>Iyy, :Izz=>Izz, :Iyz=>Iyz, :k₂=>k₂, :k₃=>k₃)
     set∇𝝭!(elements)
 
-    𝐤 = zeros(6nₚ, 6nₚ)
-    𝑎₁ = ∫δdᵘKᵍᵘᵘdᵘds => elements
-    𝑎₂ = ∫δdᵘKᵍᵘᵠdᵠds => elements
-    𝑎₃ = ∫δdᵠKᵍᵠᵠdᵠds => elements
-    𝑎₁(𝐤)
-    𝑎₂(𝐤)
-    𝑎₃(𝐤)
+    𝐊ᵘᵘ = zeros(3nₚ, 3nₚ)
+    𝐊ᵘᵠ = zeros(3nₚ, 3nₚ)
+    𝐊ᵠᵘ = zeros(3nₚ, 3nₚ)
+    𝐊ᵠᵠ = zeros(3nₚ, 3nₚ)
+    𝑎₁ = ∫εᵘNᵘdΩ => elements
+    𝑎₂ = ∫εᵘNᵠdΩ => elements
+    𝑎₃ = ∫εᵠNᵘdΩ => elements
+    𝑎₄ = ∫εᵠNᵠdΩ => elements
+    𝑎₁(𝐊ᵘᵘ)
+    𝑎₂(𝐊ᵘᵠ)
+    𝑎₃(𝐊ᵠᵘ)
+    𝑎₄(𝐊ᵠᵠ)
+    𝐤 = [𝐊ᵘᵘ 𝐊ᵘᵠ; 𝐊ᵠᵘ 𝐊ᵠᵠ]
 
     # 简支边界：Γ¹ 铰支座（u₁、u₂、u₃、φ₁），Γ² 滚动支座（u₂、u₃）
     # 只约束部分自由度，用对角罚项（齐次约束 g=0，右端项不变）
