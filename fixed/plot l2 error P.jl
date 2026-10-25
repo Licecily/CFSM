@@ -7,7 +7,7 @@ eu = [3.101360e-02, 7.798033e-03, 1.952074e-03, 4.879652e-04]
 ep = [3.999986e-02, 9.999860e-03, 2.499860e-03, 6.248600e-04]
 
 # 双对数坐标下最小二乘拟合的斜率
-function 拟合斜率(n, err)
+function fit_slope(n, err)
     x = log10.(n)
     y = log10.(err)
     x̄ = sum(x) / length(x)
@@ -15,8 +15,8 @@ function 拟合斜率(n, err)
     return sum((x .- x̄) .* (y .- ȳ)) / sum((x .- x̄).^2)
 end
 
-斜率u = 拟合斜率(n, eu)
-斜率p = 拟合斜率(n, ep)
+slope_u = fit_slope(n, eu)
+slope_φ = fit_slope(n, ep)
 
 CairoMakie.set_theme!(
     fonts = (; regular = "Microsoft YaHei", bold = "Microsoft YaHei",
@@ -40,9 +40,9 @@ ax.ylabel = "误差     log₁₀(L₂)"
 ax.title  = "固支梁（集中力）"
 
 # 在两条曲线附近标注拟合斜率（x 取 n=40 处，上下错开）
-text!(ax, 40, 0.8 * eu[3], text = @sprintf("kᵤ= %.2f", 斜率u),
+text!(ax, 40, 0.8 * eu[3], text = @sprintf("kᵤ= %.2f", slope_u),
       color = :dodgerblue, align = (:right, :top), fontsize = 14)
-text!(ax, 40, 1.8 * ep[3], text = @sprintf("kᵩ= %.2f", 斜率p),
+text!(ax, 40, 1.8 * ep[3], text = @sprintf("kᵩ= %.2f", slope_φ),
       color = :orange, align = (:right, :bottom), fontsize = 14)
 
 axislegend(ax, position = :rt, framevisible = false)

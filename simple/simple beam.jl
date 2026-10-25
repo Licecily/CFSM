@@ -117,27 +117,27 @@ d₂ = 𝐤ᵦ \ f
 #   弯矩 M = −q x(L−x)/2 ⇒ φ = w_b′ = q(L³ − 6Lx² + 4x³)/(24EIyy)
 #   w_b = q x(L³ − 2Lx² + x³)/(24EIyy)，w_s = q x(L−x)/(2k₃GA)
 #   w  = w_b + w_s
-w均布(x) = q*x*(L^3 - 2*L*x^2 + x^3)/(24*E*Iyy) + q*x*(L-x)/(2*k₃*G*A)
-φ均布(x) = q*(L^3 - 6*L*x^2 + 4*x^3)/(24*E*Iyy)
+w_uniform(x) = q*x*(L^3 - 2*L*x^2 + x^3)/(24*E*Iyy) + q*x*(L-x)/(2*k₃*G*A)
+φ_uniform(x) = q*(L^3 - 6*L*x^2 + 4*x^3)/(24*E*Iyy)
 
 # 跨中集中力 P（利用对称性，x̄ = L − x 表示镜像点）：
 #   0 ≤ x ≤ L/2：w_b = P x(3L² − 4x²)/(48EIyy)，w_s = P x/(2k₃GA)
 #                φ   = P(L² − 4x²)/(16EIyy)
 #   L/2 ≤ x ≤ L：w(x) = w(L−x)，φ(x) = −φ(L−x)
-w集中(x) = x <= L/2 ? P*x*(3*L^2 - 4*x^2)/(48*E*Iyy) + P*x/(2*k₃*G*A) :
+w_point(x) = x <= L/2 ? P*x*(3*L^2 - 4*x^2)/(48*E*Iyy) + P*x/(2*k₃*G*A) :
                        P*(L-x)*(3*L^2 - 4*(L-x)^2)/(48*E*Iyy) + P*(L-x)/(2*k₃*G*A)
-φ集中(x) = x <= L/2 ? P*(L^2 - 4*x^2)/(16*E*Iyy) :
+φ_point(x) = x <= L/2 ? P*(L^2 - 4*x^2)/(16*E*Iyy) :
                       -P*(L^2 - 4*(L-x)^2)/(16*E*Iyy)
 
 # ===================== 8. 整梁分析（逐节点 + L₂ 误差）=====================
-function 整梁分析(名称, d, wᵉ, φᵉ, nodes, entities, nₚ, nᵤ)
+function analyze_beam(name, d, wᵉ, φᵉ, nodes, entities, nₚ, nᵤ)
     # 有限元解写回节点，供 L₂d 读取（d₁..d₃ = u₁..u₃，d₄..d₆ = φ₁..φ₃）
     push!(nodes,
           :d₁=>[d[3i-2] for i in 1:nₚ], :d₂=>[d[3i-1] for i in 1:nₚ], :d₃=>[d[3i] for i in 1:nₚ],
           :d₄=>[d[nᵤ+3i-2] for i in 1:nₚ], :d₅=>[d[nᵤ+3i-1] for i in 1:nₚ], :d₆=>[d[nᵤ+3i] for i in 1:nₚ])
 
     𝑥    = [nodes[i].x for i in 1:nₚ]
-    次序 = sortperm(𝑥)
+    sorted_idx = sortperm(𝑥)
 
     # 精确解只有 u₂、φ₃ 非零
     wᶠ = [d[3i-1]  for i in 1:nₚ]
@@ -145,9 +145,9 @@ function 整梁分析(名称, d, wᵉ, φᵉ, nodes, entities, nₚ, nᵤ)
     wᵉˡ = wᵉ.(𝑥)
     φᵉˡ = φᵉ.(𝑥)
 
-    println("\n", 名称)
+    println("\n", name)
     println("      x          w_FE          w_exact       |Δw|          φ_FE          φ_exact       |Δφ|")
-    for k in 次序
+    for k in sorted_idx
         @printf("%9.4f  %13.6e  %13.6e  %10.3e  %13.6e  %13.6e  %10.3e\n",
                 𝑥[k], wᶠ[k], wᵉˡ[k], abs(wᶠ[k]-wᵉˡ[k]),
                 φᶠ[k], φᵉˡ[k], abs(φᶠ[k]-φᵉˡ[k]))
@@ -164,19 +164,19 @@ function 整梁分析(名称, d, wᵉ, φᵉ, nodes, entities, nₚ, nᵤ)
                     :φ₂=>(x,y,z)->0.0, :φ₃=>(x,y,z)->φᵉ(x))
     set𝝭!(err)
 
-    Δ², 范² = L₂d(err)
-    相对u = sqrt(sum(Δ²[1:3])) / sqrt(sum(范²[1:3]))
-    相对φ = sqrt(sum(Δ²[4:6])) / sqrt(sum(范²[4:6]))
-    @printf("相对 L₂ 误差：位移 %.3e，转角 %.3e\n", 相对u, 相对φ)
+    Δ², norm_sq = L₂d(err)
+    rel_u = sqrt(sum(Δ²[1:3])) / sqrt(sum(norm_sq[1:3]))
+    rel_φ = sqrt(sum(Δ²[4:6])) / sqrt(sum(norm_sq[4:6]))
+    @printf("相对 L₂ 误差：位移 %.3e，转角 %.3e\n", rel_u, rel_φ)
 
-    return 相对u, 相对φ
+    return rel_u, rel_φ
 end
 
 # ===================== 9. 执行分析 =====================
 println("=== 简支梁：均布荷载 q = $q N/m ===")
-结果q = 整梁分析("算例 1：均布荷载 q", d₁, w均布, φ均布, nodes, entities, nₚ, nᵤ)
+result_q = analyze_beam("算例 1：均布荷载 q", d₁, w_uniform, φ_uniform, nodes, entities, nₚ, nᵤ)
 
 println("\n=== 简支梁：跨中集中力 P = $P N ===")
-结果P = 整梁分析("算例 2：跨中集中力 P", d₂, w集中, φ集中, nodes, entities, nₚ, nᵤ)
+result_P = analyze_beam("算例 2：跨中集中力 P", d₂, w_point, φ_point, nodes, entities, nₚ, nᵤ)
 
 gmsh.finalize()

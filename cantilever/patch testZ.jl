@@ -51,7 +51,7 @@ u₃(x, y, z) = 1.0e-3*z
 φ₂(x, y, z) = 1.0e-3
 φ₃(x, y, z) = 1.0e-3*z
 
-精确值(x, y, z) = [u₁(x,y,z), u₂(x,y,z), u₃(x,y,z),
+exact_values(x, y, z) = [u₁(x,y,z), u₂(x,y,z), u₃(x,y,z),
                   φ₁(x,y,z), φ₂(x,y,z), φ₃(x,y,z)]
 
 # ===================== 3. 读入网格（沿 Z 的梁）=====================
@@ -121,34 +121,34 @@ push!(nodes,
 # ===================== 6. 节点值检查 =====================
 # 节点 i 的 6 个自由度：位移块 [3i-2, 3i]，转角块 [nᵤ+3i-2, nᵤ+3i]
 𝐝(i)  = vcat(d[3i-2:3i], d[nᵤ+3i-2:nᵤ+3i])
-𝐝ᵉ(i) = 精确值(nodes[i].x, nodes[i].y, nodes[i].z)
+𝐝ᵉ(i) = exact_values(nodes[i].x, nodes[i].y, nodes[i].z)
 
 𝑧     = [nodes[i].z for i in 1:nₚ]
-次序  = sortperm(𝑧)
-端点  = [次序[1], 次序[end]]
-内部  = setdiff(次序, 端点)
+sorted_idx  = sortperm(𝑧)
+end_nodes  = [sorted_idx[1], sorted_idx[end]]
+interior_nodes  = setdiff(sorted_idx, end_nodes)
 
 Δ = [𝐝(i) .- 𝐝ᵉ(i) for i in 1:nₚ]
-场幅值 = maximum(abs.(vcat([𝐝ᵉ(i) for i in 1:nₚ]...)))
+field_amp = maximum(abs.(vcat([𝐝ᵉ(i) for i in 1:nₚ]...)))
 
 println("\n=== 分片试验：悬臂梁算例（沿 Z 方向）===")
 println("      z        max_c|Δd_c|   (c = u₁,u₂,u₃,φ₁,φ₂,φ₃)")
-for k in 次序
-    标记 = k ∈ 端点 ? "  (端部，罚约束)" : ""
-    @printf("%9.4f   %12.3e%s\n", 𝑧[k], maximum(abs.(Δ[k])), 标记)
+for k in sorted_idx
+    marker = k ∈ end_nodes ? "  (端部，罚约束)" : ""
+    @printf("%9.4f   %12.3e%s\n", 𝑧[k], maximum(abs.(Δ[k])), marker)
 end
 
-分量名 = ("u₁", "u₂", "u₃", "φ₁", "φ₂", "φ₃")
+comp_names = ("u₁", "u₂", "u₃", "φ₁", "φ₂", "φ₃")
 println("\n各分量最大绝对误差（内部节点）:")
 for c in 1:6
-    𝑒 = maximum([abs(Δ[i][c]) for i in 内部])
-    @printf("  %s : %12.3e\n", 分量名[c], 𝑒)
+    𝑒 = maximum([abs(Δ[i][c]) for i in interior_nodes])
+    @printf("  %s : %12.3e\n", comp_names[c], 𝑒)
 end
 
-最大误差 = maximum([maximum(abs.(Δ[i])) for i in 内部])
-相对误差 = 最大误差 / 场幅值
-println("\n内部节点最大绝对误差 ", 最大误差)
-println("相对误差（以场幅值 ", 场幅值, " 为基准）", 相对误差)
+max_err = maximum([maximum(abs.(Δ[i])) for i in interior_nodes])
+rel_err = max_err / field_amp
+println("\n内部节点最大绝对误差 ", max_err)
+println("相对误差（以场幅值 ", field_amp, " 为基准）", rel_err)
 
 # ===================== 7. 域内 L₂ 误差（算子 L₂d 见 beam.jl）=====================
 # 刚度装配用 1 点减缩积分；误差积分另取高阶 Gauss，避免积分误差掩盖真实误差
@@ -160,23 +160,23 @@ prescribe!(elements_L₂, :u₁=>u₁, :u₂=>u₂, :u₃=>u₃,
 set𝝭!(elements_L₂)
 
 # Δ²[c] = ∫(dᶜ_FE − dᶜ_exact)²dΩ，范数²[c] = ∫(dᶜ_exact)²dΩ
-误差², 范数² = L₂d(elements_L₂)
+err_sq, norm_sq = L₂d(elements_L₂)
 
-L₂误差 = sqrt.(误差²)
-L₂范数 = sqrt.(范数²)
+L2_err = sqrt.(err_sq)
+L2_norm = sqrt.(norm_sq)
 
 println("\n域内 L₂ 误差（高阶 Gauss 积分）:")
 for c in 1:6
     @printf("  %s : |e|_L₂ = %12.3e   相对 = %12.3e\n",
-            分量名[c], L₂误差[c], L₂误差[c]/L₂范数[c])
+            comp_names[c], L2_err[c], L2_err[c]/L2_norm[c])
 end
 
 # 位移与转角分开统计（单位不同，不混合）
-相对L₂位移 = sqrt(sum(误差²[1:3])) / sqrt(sum(范数²[1:3]))
-相对L₂转角 = sqrt(sum(误差²[4:6])) / sqrt(sum(范数²[4:6]))
-@printf("\n相对 L₂ 误差：位移 %.3e，转角 %.3e\n", 相对L₂位移, 相对L₂转角)
+rel_L2_u = sqrt(sum(err_sq[1:3])) / sqrt(sum(norm_sq[1:3]))
+rel_L2_φ = sqrt(sum(err_sq[4:6])) / sqrt(sum(norm_sq[4:6]))
+@printf("\n相对 L₂ 误差：位移 %.3e，转角 %.3e\n", rel_L2_u, rel_L2_φ)
 
-通过 = 相对误差 < 1.0e-5 && 相对L₂位移 < 1.0e-5 && 相对L₂转角 < 1.0e-5
-println(通过 ? "分片试验：通过" : "分片试验：未通过")
+passed = rel_err < 1.0e-5 && rel_L2_u < 1.0e-5 && rel_L2_φ < 1.0e-5
+println(passed ? "分片试验：通过" : "分片试验：未通过")
 
 gmsh.finalize()

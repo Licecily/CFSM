@@ -111,7 +111,7 @@ wᴾ(x) = P*x^2*(3L - x)/(6*E*Iyy) + P*x/(k₃*G*A)
 φᴾ(x) = P*x*(2L - x)/(2*E*Iyy)
 
 # ===================== 8. 整梁分析（逐节点 + L₂ 误差）=====================
-function 整梁分析(名称, d, wᵉ, φᵉ, nodes, entities, nₚ, nᵤ)
+function analyze_beam(name, d, wᵉ, φᵉ, nodes, entities, nₚ, nᵤ)
     # 有限元解写回节点，供 L₂d 读取（d₁..d₃ = u₁..u₃，d₄..d₆ = φ₁..φ₃）
     push!(nodes,
           :d₁=>[d[3i-2] for i in 1:nₚ], :d₂=>[d[3i-1] for i in 1:nₚ], :d₃=>[d[3i] for i in 1:nₚ],
@@ -122,24 +122,24 @@ function 整梁分析(名称, d, wᵉ, φᵉ, nodes, entities, nₚ, nᵤ)
     𝐝ᵉ(i) = [0.0, wᵉ(nodes[i].x), 0.0, 0.0, 0.0, φᵉ(nodes[i].x)]
 
     𝑥     = [nodes[i].x for i in 1:nₚ]
-    次序  = sortperm(𝑥)
+    sorted_idx  = sortperm(𝑥)
     Δ     = [𝐝(i) .- 𝐝ᵉ(i) for i in 1:nₚ]
-    场幅值 = maximum(abs.(vcat([𝐝ᵉ(i) for i in 1:nₚ]...)))
-    最大误差 = maximum([maximum(abs.(Δ[i])) for i in 1:nₚ])
-    相对误差 = 最大误差 / 场幅值
+    field_amp = maximum(abs.(vcat([𝐝ᵉ(i) for i in 1:nₚ]...)))
+    max_err = maximum([maximum(abs.(Δ[i])) for i in 1:nₚ])
+    rel_err = max_err / field_amp
 
-    println("\n==================== ", 名称, " ====================")
+    println("\n==================== ", name, " ====================")
     println("      x        max_c|Δd_c|   (c = u₁,u₂,u₃,φ₁,φ₂,φ₃)")
-    for k in 次序
+    for k in sorted_idx
         @printf("%9.4f   %12.3e\n", 𝑥[k], maximum(abs.(Δ[k])))
     end
 
-    分量名 = ("u₁", "u₂", "u₃", "φ₁", "φ₂", "φ₃")
+    comp_names = ("u₁", "u₂", "u₃", "φ₁", "φ₂", "φ₃")
     println("\n各分量最大绝对误差:")
     for c in 1:6
-        @printf("  %s : %12.3e\n", 分量名[c], maximum([abs(Δ[i][c]) for i in 1:nₚ]))
+        @printf("  %s : %12.3e\n", comp_names[c], maximum([abs(Δ[i][c]) for i in 1:nₚ]))
     end
-    @printf("\n全梁最大绝对误差 %12.3e，相对误差 %.3e\n", 最大误差, 相对误差)
+    @printf("\n全梁最大绝对误差 %12.3e，相对误差 %.3e\n", max_err, rel_err)
 
     # 域内 L₂ 误差
     err = getElements(nodes, entities["Ω"], 10)
@@ -148,26 +148,26 @@ function 整梁分析(名称, d, wᵉ, φᵉ, nodes, entities, nₚ, nᵤ)
                     :φ₂=>(x,y,z)->0.0, :φ₃=>(x,y,z)->φᵉ(x))
     set𝝭!(err)
 
-    Δ², 范² = L₂d(err)
-    相对u = sqrt(sum(Δ²[1:3])) / sqrt(sum(范²[1:3]))
-    相对φ = sqrt(sum(Δ²[4:6])) / sqrt(sum(范²[4:6]))
+    Δ², norm_sq = L₂d(err)
+    rel_u = sqrt(sum(Δ²[1:3])) / sqrt(sum(norm_sq[1:3]))
+    rel_φ = sqrt(sum(Δ²[4:6])) / sqrt(sum(norm_sq[4:6]))
 
     println("\n域内 L₂ 误差:")
     for c in 1:6
-        if 范²[c] > 0
+        if norm_sq[c] > 0
             @printf("  %s : |e|_L₂ = %12.3e   相对 = %12.3e\n",
-                    分量名[c], sqrt(Δ²[c]), sqrt(Δ²[c])/sqrt(范²[c]))
+                    comp_names[c], sqrt(Δ²[c]), sqrt(Δ²[c])/sqrt(norm_sq[c]))
         else
-            @printf("  %s : |e|_L₂ = %12.3e   相对 = —\n", 分量名[c], sqrt(Δ²[c]))
+            @printf("  %s : |e|_L₂ = %12.3e   相对 = —\n", comp_names[c], sqrt(Δ²[c]))
         end
     end
-    @printf("\n相对 L₂ 误差：位移 %.3e，转角 %.3e\n", 相对u, 相对φ)
+    @printf("\n相对 L₂ 误差：位移 %.3e，转角 %.3e\n", rel_u, rel_φ)
 
-    return 相对误差, 相对u, 相对φ
+    return rel_err, rel_u, rel_φ
 end
 
 # ===================== 9. 执行分析 =====================
-结果q = 整梁分析("算例 1：均布荷载 q", d₁, wᵍ, φᵍ, nodes, entities, nₚ, nᵤ)
-结果P = 整梁分析("算例 2：自由端集中力 P", d₂, wᴾ, φᴾ, nodes, entities, nₚ, nᵤ)
+result_q = analyze_beam("算例 1：均布荷载 q", d₁, wᵍ, φᵍ, nodes, entities, nₚ, nᵤ)
+result_P = analyze_beam("算例 2：自由端集中力 P", d₂, wᴾ, φᴾ, nodes, entities, nₚ, nᵤ)
 
 gmsh.finalize()

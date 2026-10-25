@@ -6,14 +6,14 @@ n  = [5.0, 10.0, 20.0, 40.0]
 eu = [1.228207e-02, 3.097302e-03, 7.759600e-04, 1.940614e-04]
 ep = [9.999930e-03, 2.499930e-03, 6.249300e-04, 1.561800e-04]
 
-function 拟合斜率(n, err)
+function fit_slope(n, err)
     x = log10.(n);  y = log10.(err)
     x̄ = sum(x)/length(x);  ȳ = sum(y)/length(y)
     return sum((x .- x̄) .* (y .- ȳ)) / sum((x .- x̄).^2)
 end
 
-斜率u = 拟合斜率(n, eu)
-斜率p = 拟合斜率(n, ep)
+slope_u = fit_slope(n, eu)
+slope_φ = fit_slope(n, ep)
 
 CairoMakie.set_theme!(
     fonts = (; regular = "Microsoft YaHei", bold = "Microsoft YaHei",
@@ -35,9 +35,9 @@ ax.xlabel = "单元数   log₁₀(n)"
 ax.ylabel = "误差     log₁₀(L₂)"
 ax.title  = "悬臂梁（自由端集中力）"
 
-text!(ax, 20, 2.0 * eu[3], text = @sprintf("kᵤ= %.2f", 斜率u),
+text!(ax, 20, 2.0 * eu[3], text = @sprintf("kᵤ= %.2f", slope_u),
       color = :dodgerblue, align = (:right, :top), fontsize = 14)
-text!(ax, 20, 0.7 * ep[3], text = @sprintf("kᵩ= %.2f", 斜率p),
+text!(ax, 20, 0.7 * ep[3], text = @sprintf("kᵩ= %.2f", slope_φ),
       color = :orange, align = (:right, :bottom), fontsize = 14)
 
 axislegend(ax, position = :rt, framevisible = false)

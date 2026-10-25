@@ -4,6 +4,8 @@
 \usepackage[margin=2.5cm]{geometry}
 \usepackage{amsmath,amssymb,amsthm,bm}
 \usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,fit,backgrounds,calc}
 \usepackage{booktabs}
 \usepackage{float}
 \usepackage{caption}
@@ -11,6 +13,13 @@
 \usepackage[hidelinks]{hyperref}
 
 \captionsetup{font=small,labelsep=quad}
+\tikzset{
+  flowbox/.style={draw, rounded corners, align=center, fill=blue!4, inner sep=3pt, font=\footnotesize},
+  flowio/.style={draw, trapezium, trapezium left angle=70, trapezium right angle=110,
+                 align=center, fill=green!8, inner sep=3pt, font=\footnotesize},
+  flowarr/.style={-{Latex[length=2mm]}, thick},
+  detailbox/.style={draw, rounded corners, align=left, fill=orange!4, inner sep=3pt, font=\scriptsize}
+}
 \setlength{\parskip}{0.35em}
 \setlength{\parindent}{2em}
 \setlength{\emergencystretch}{2em}
@@ -841,6 +850,44 @@ k=-p.
 \end{equation}
 因此图中标注的负斜率对应正的收敛阶：$k=-2$ 表示 $p=2$，即 $O(h^2)$。
 
+
+\newpage
+\section{程序实现流程}\label{sec:flow}
+
+图~\ref{fig:flow} 给出程序的总体流程：输入节点、拓扑、材料/截面与参考向量，
+经形函数离散后分别组装刚度矩阵和荷载/边界，求解位移，最后做误差统计与内力后处理。
+
+\begin{figure}[H]
+\centering
+\resizebox{0.9\textwidth}{!}{%
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=2pt, align=center, text width=5.4cm,
+              minimum width=5.8cm, inner sep=4pt, font=\scriptsize},
+  core/.style={box, fill=blue!10},
+  aux/.style={box, fill=cyan!8},
+  io/.style={box, fill=green!10},
+  post/.style={box, fill=orange!10},
+  arr/.style={-{Latex[length=2mm]}, thick}]
+\node[io] (input) at (0,0) {\textbf{输入}\\ 节点 \texttt{get}$\boldsymbol{X}_i$，拓扑 \texttt{getElements}\\ 材料/截面 \texttt{prescribe!}，参考向量 $\mathbf{R}(ap)$};
+\node[aux, below=8mm of input] (pre) {\textbf{形函数与导数}\\ $\mathrm{set}\nabla\boldsymbol{\mathsf{M}}!$，一点 Gauss};
+\node[core, minimum height=2.6cm, below=12mm of pre, xshift=-3.2cm] (stiff) {\textbf{刚度矩阵}\\ $\int\varepsilon^{u}N^{u}d\Omega$，$\int\varepsilon^{u}N^{\varphi}d\Omega$\\ $\int\varepsilon^{\varphi}N^{u}d\Omega$，$\int\varepsilon^{\varphi}N^{\varphi}d\Omega$\\ 组装 $\mathbf{k}=\left[\begin{smallmatrix}\mathbf{K}^{uu}&\mathbf{K}^{u\varphi}\\\mathbf{K}^{\varphi u}&\mathbf{K}^{\varphi\varphi}\end{smallmatrix}\right]$};
+\node[aux, minimum height=2.6cm, below=12mm of pre, xshift=3.2cm] (loadbc) {\textbf{荷载与边界}\\ 分布荷载 $\int v_i b_i d\Omega$\\ 集中力/面力 $\int v_i t_i d\Gamma$\\ 罚函数 $\int d_i g_i d\Gamma$};
+\node[fit=(stiff)(loadbc), inner sep=0pt] (row3) {};
+\node[core, below=12mm of row3] (solve) {\textbf{求解}\\ $\mathbf{d}=\mathbf{k}\backslash\mathbf{f}$};
+\node[post, below=12mm of solve, xshift=-3.2cm] (post) {\textbf{后处理}\\ $L_2d$：位移/转角误差\\ 由 $\mathbf{d}$ 求 $N,Q,M$};
+\node[io, below=12mm of solve, xshift=3.2cm] (output) {\textbf{输出}\\ 轴力 $N$，剪力 $Q_2,Q_3$\\ 弯矩 $M_2,M_3$，扭矩 $M_1$};
+\draw[arr] (input)--(pre);
+\draw[arr] (pre.south)--++(0,-6mm)-|(stiff.north);
+\draw[arr] (pre.south)--++(0,-6mm)-|(loadbc.north);
+\draw[arr] (stiff.south)|-(solve.west);
+\draw[arr] (loadbc.south)|-(solve.east);
+\draw[arr] (solve.south)--++(0,-6mm)-|(post.north);
+\draw[arr] (solve.south)--++(0,-6mm)-|(output.north);
+\end{tikzpicture}}
+\caption{程序实现流程：输入 $\rightarrow$ 刚度/荷载与边界 $\rightarrow$ 求解 $\rightarrow$ 后处理与输出}
+\label{fig:flow}
+\end{figure}
+
 % =====================================================================
 \part{数值算例}
 % =====================================================================
@@ -885,15 +932,18 @@ $\mathbf{e}_y=\mathbf{E}_Z$、$\mathbf{e}_z=-\mathbf{E}_Y$。因此整体 $Y$ �
 $L_2$ 误差用高阶 Gauss 积分计算。分片试验使用 $n=10$ 个单元的网格
 （11 个节点），收敛研究使用 $n=5,10,20,40$（集中力工况 $n=10,20,40,80$）。
 
-\section{精确解}
-
-为计算 $L_2$ 误差，需要给出各支承条件下梁的 Timoshenko 精确解。
-以下公式与有限元采用同一套符号约定：$q$、$P$ 为整体 $Y$ 向荷载，向下为负，
+为计算 $L_2$ 误差，各算例在“精确解”小节给出对应支承条件下的 Timoshenko 精确解。
+这些公式与有限元采用同一套符号约定：$q$、$P$ 为整体 $Y$ 向荷载，向下为负，
 挠度 $w=u_2$ 以整体 $Y$ 正向为正，转角取 $\varphi=\varphi_3$。
-每条公式都包含弯曲贡献与剪切贡献两部分，其中剪切项来自 Timoshenko 梁的
-横向剪切变形。
+每条公式都包含弯曲贡献与剪切贡献两部分，其中剪切项来自 Timoshenko 梁的横向剪切变形。
 
-\subsection{固支梁}
+\section{固支梁算例}
+
+固支梁在 $x=0$ 与 $x=L$ 两端的 6 个自由度全部用罚函数约束为零，
+即 $u_1=u_2=u_3=\varphi_1=\varphi_2=\varphi_3=0$。
+均布荷载通过 $\int N_Ib_i\ud x$ 施加，跨中集中力直接加到跨中节点。
+
+\subsection{精确解}
 
 两端固定（$x=0,L$ 处 $w=0$、$\varphi=0$）。
 
@@ -919,57 +969,6 @@ w_P(x)=
 \dfrac{P(L-x)(L-2x)}{8EI_{yy}}, & \dfrac{L}{2}\le x\le L.
 \end{cases}
 \end{equation}
-
-\subsection{悬臂梁}
-
-左端固定（$x=0$ 处 $w=0$、$\varphi=0$），右端自由。
-
-均布荷载 $q$：
-\begin{equation}\label{eq:cant-q}
-w_q(x)=\frac{qx^2(6L^2-4Lx+x^2)}{24EI_{yy}}+\frac{qx(2L-x)}{2k_3GA},
-\qquad
-\varphi_q(x)=\frac{qx(3L^2-3Lx+x^2)}{6EI_{yy}}.
-\end{equation}
-
-自由端集中力 $P$：
-\begin{equation}\label{eq:cant-P}
-w_P(x)=\frac{Px^2(3L-x)}{6EI_{yy}}+\frac{Px}{k_3GA},
-\qquad
-\varphi_P(x)=\frac{Px(2L-x)}{2EI_{yy}}.
-\end{equation}
-
-\subsection{简支梁}
-
-两端简支（$x=0,L$ 处 $w=0$、弯矩为零，转角自由）。
-
-均布荷载 $q$：
-\begin{equation}\label{eq:simple-q}
-w_q(x)=\frac{qx\left(L^3-2Lx^2+x^3\right)}{24EI_{yy}}+\frac{qx(L-x)}{2k_3GA},
-\qquad
-\varphi_q(x)=\frac{q\left(L^3-6Lx^2+4x^3\right)}{24EI_{yy}}.
-\end{equation}
-
-跨中集中力 $P$（利用对称性，$x\ge L/2$ 时用 $L-x$ 代替 $x$）：
-\begin{equation}\label{eq:simple-P}
-w_P(x)=
-\begin{cases}
-\dfrac{Px\left(3L^2-4x^2\right)}{48EI_{yy}}+\dfrac{Px}{2k_3GA}, & 0\le x\le \dfrac{L}{2},\\[8pt]
-\dfrac{P(L-x)\left(3L^2-4(L-x)^2\right)}{48EI_{yy}}+\dfrac{P(L-x)}{2k_3GA}, & \dfrac{L}{2}\le x\le L,
-\end{cases}
-\end{equation}
-\begin{equation}\label{eq:simple-P-phi}
-\varphi_P(x)=
-\begin{cases}
-\dfrac{P\left(L^2-4x^2\right)}{16EI_{yy}}, & 0\le x\le \dfrac{L}{2},\\[8pt]
--\dfrac{P\left(L^2-4(L-x)^2\right)}{16EI_{yy}}, & \dfrac{L}{2}\le x\le L.
-\end{cases}
-\end{equation}
-
-\section{固支梁算例}
-
-固支梁在 $x=0$ 与 $x=L$ 两端的 6 个自由度全部用罚函数约束为零，
-即 $u_1=u_2=u_3=\varphi_1=\varphi_2=\varphi_3=0$。
-均布荷载通过 $\int N_Ib_i\ud x$ 施加，跨中集中力直接加到跨中节点。
 
 \subsection{分片试验}
 
@@ -1086,6 +1085,24 @@ $n=5$ 时跨中荷载附近的分段精确解还处于渐近前区，$5\to10$ �
 右端 $\Gamma^2$（$x=L$）自由。均布荷载通过 $\int N_Ib_i\ud x$ 施加，
 集中力通过自由端的面力积分 $\int N_It_i\ud\Gamma$ 施加。
 
+\subsection{精确解}
+
+左端固定（$x=0$ 处 $w=0$、$\varphi=0$），右端自由。
+
+均布荷载 $q$：
+\begin{equation}\label{eq:cant-q}
+w_q(x)=\frac{qx^2(6L^2-4Lx+x^2)}{24EI_{yy}}+\frac{qx(2L-x)}{2k_3GA},
+\qquad
+\varphi_q(x)=\frac{qx(3L^2-3Lx+x^2)}{6EI_{yy}}.
+\end{equation}
+
+自由端集中力 $P$：
+\begin{equation}\label{eq:cant-P}
+w_P(x)=\frac{Px^2(3L-x)}{6EI_{yy}}+\frac{Px}{k_3GA},
+\qquad
+\varphi_P(x)=\frac{Px(2L-x)}{2EI_{yy}}.
+\end{equation}
+
 \subsection{分片试验}
 
 分片试验的线性场与固支梁算例相同（式~\eqref{eq:patchX}--\eqref{eq:patchZ}）。
@@ -1151,6 +1168,33 @@ $u_1=u_2=u_3=0$ 与 $\varphi_1=0$；$\Gamma^2$（$x=L$）约束 $u_2=u_3=0$，
 “简支”的本质。约束 $\varphi_1$ 是为了消除绕梁轴的刚体扭转；两端约束 $u_3$
 是为了消除侧向刚体平移与转动。由于荷载只有整体 $Y$ 向分量，$u_3$ 与
 $\varphi_2$ 的响应恒为零。
+
+\subsection{精确解}
+
+两端简支（$x=0,L$ 处 $w=0$、弯矩为零，转角自由）。
+
+均布荷载 $q$：
+\begin{equation}\label{eq:simple-q}
+w_q(x)=\frac{qx\left(L^3-2Lx^2+x^3\right)}{24EI_{yy}}+\frac{qx(L-x)}{2k_3GA},
+\qquad
+\varphi_q(x)=\frac{q\left(L^3-6Lx^2+4x^3\right)}{24EI_{yy}}.
+\end{equation}
+
+跨中集中力 $P$（利用对称性，$x\ge L/2$ 时用 $L-x$ 代替 $x$）：
+\begin{equation}\label{eq:simple-P}
+w_P(x)=
+\begin{cases}
+\dfrac{Px\left(3L^2-4x^2\right)}{48EI_{yy}}+\dfrac{Px}{2k_3GA}, & 0\le x\le \dfrac{L}{2},\\[8pt]
+\dfrac{P(L-x)\left(3L^2-4(L-x)^2\right)}{48EI_{yy}}+\dfrac{P(L-x)}{2k_3GA}, & \dfrac{L}{2}\le x\le L,
+\end{cases}
+\end{equation}
+\begin{equation}\label{eq:simple-P-phi}
+\varphi_P(x)=
+\begin{cases}
+\dfrac{P\left(L^2-4x^2\right)}{16EI_{yy}}, & 0\le x\le \dfrac{L}{2},\\[8pt]
+-\dfrac{P\left(L^2-4(L-x)^2\right)}{16EI_{yy}}, & \dfrac{L}{2}\le x\le L.
+\end{cases}
+\end{equation}
 
 \subsection{分片试验}
 

@@ -6,7 +6,7 @@ eu = [1.3588108302e-01, 3.5074296666e-02, 8.8372841559e-03, 2.2132226739e-03]
 ep = [1.7977743781e-01, 4.5606805975e-02, 1.1442579346e-02, 2.8630435938e-03]
 
 # 双对数坐标下最小二乘拟合的斜率
-function 拟合斜率(n, err)
+function fit_slope(n, err)
     x = log10.(n)
     y = log10.(err)
     x̄ = sum(x) / length(x)
@@ -14,8 +14,8 @@ function 拟合斜率(n, err)
     return sum((x .- x̄) .* (y .- ȳ)) / sum((x .- x̄).^2)
 end
 
-斜率u = 拟合斜率(n, eu)
-斜率p = 拟合斜率(n, ep)
+slope_u = fit_slope(n, eu)
+slope_φ = fit_slope(n, ep)
 
 CairoMakie.set_theme!(
     fonts = (; regular = "Microsoft YaHei", bold = "Microsoft YaHei",
@@ -40,9 +40,9 @@ ax.ylabel = "误差     log₁₀(L₂)"
 ax.title  = "固支梁（均布荷载）"
 
 # 在两条曲线附近标注拟合斜率
-text!(ax, 20, 8e-3, text = "kᵤ= " * string(round(斜率u, digits = 2)),
+text!(ax, 20, 8e-3, text = "kᵤ= " * string(round(slope_u, digits = 2)),
       color = :dodgerblue, align = (:right, :top), fontsize = 14)
-text!(ax, 20, 18e-3, text = "kᵩ= " * string(round(斜率p, digits = 2)),
+text!(ax, 20, 18e-3, text = "kᵩ= " * string(round(slope_φ, digits = 2)),
       color = :orange, align = (:right, :bottom), fontsize = 14)
 
 axislegend(ax, position = :rt, framevisible = false)

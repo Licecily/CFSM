@@ -115,36 +115,36 @@ d₂ = 𝐤ᵦ \ f
 #   弯曲挠度  w_b(x) = q x²(L−x)²/(24EIyy)
 #   剪切挠度  w_s(x) = q x(L−x)/(2k₃GA)
 #   截面转角  φ(x)   = w_b′(x) = q x(L−x)(L−2x)/(12EIyy)
-w均布(x) = q*x^2*(L-x)^2/(24*E*Iyy) + q*x*(L-x)/(2*k₃*G*A)
-φ均布(x) = q*x*(L-x)*(L-2*x)/(12*E*Iyy)
+w_uniform(x) = q*x^2*(L-x)^2/(24*E*Iyy) + q*x*(L-x)/(2*k₃*G*A)
+φ_uniform(x) = q*x*(L-x)*(L-2*x)/(12*E*Iyy)
 
 # --- 算例 2：两端固定，跨中集中力 P（Timoshenko 梁，弯曲 + 剪切）---
 #   0 ≤ x ≤ L/2：w_b = P x²(3L−4x)/(48EIyy)，w_s = P x/(2k₃GA)
 #                φ   = w_b′ = P x(L−2x)/(8EIyy)
 #   L/2 ≤ x ≤ L：由对称性 w(x) = w(L−x)，φ(x) = P(L−x)(L−2x)/(8EIyy)，
 #                w_b = P(L−x)²(4x−L)/(48EIyy)，w_s = P(L−x)/(2k₃GA)
-w集中(x) = x ≤ L/2 ? P*x^2*(3L-4*x)/(48*E*Iyy) + P*x/(2*k₃*G*A) :
+w_point(x) = x ≤ L/2 ? P*x^2*(3L-4*x)/(48*E*Iyy) + P*x/(2*k₃*G*A) :
                      P*(L-x)^2*(4*x-L)/(48*E*Iyy) + P*(L-x)/(2*k₃*G*A)
-φ集中(x) = x ≤ L/2 ? P*x*(L-2*x)/(8*E*Iyy) : P*(L-x)*(L-2*x)/(8*E*Iyy)
+φ_point(x) = x ≤ L/2 ? P*x*(L-2*x)/(8*E*Iyy) : P*(L-x)*(L-2*x)/(8*E*Iyy)
 
 # --- 有限元解（u₂、φ₃）与精确解在全梁所有节点上的对比 ---
 𝑥    = [nodes[i].x for i in 1:nₚ]
-次序 = sortperm(𝑥)
+sorted_idx = sortperm(𝑥)
 
 wᶠ¹ = [d₁[3i-1]      for i in 1:nₚ]      # 均布荷载：FE 位移
 φᶠ¹ = [d₁[nᵤ+3i]     for i in 1:nₚ]      # 均布荷载：FE 转角
-wᵉ¹ = w均布.(𝑥)
-φᵉ¹ = φ均布.(𝑥)
+wᵉ¹ = w_uniform.(𝑥)
+φᵉ¹ = φ_uniform.(𝑥)
 
 wᶠ² = [d₂[3i-1]      for i in 1:nₚ]      # 集中力：FE 位移
 φᶠ² = [d₂[nᵤ+3i]     for i in 1:nₚ]      # 集中力：FE 转角
-wᵉ² = w集中.(𝑥)
-φᵉ² = φ集中.(𝑥)
+wᵉ² = w_point.(𝑥)
+φᵉ² = φ_point.(𝑥)
 
-function 打印对比(标题, 𝑥, 次序, wᶠ, wᵉ, φᶠ, φᵉ)
-    println("\n", 标题)
+function print_comparison(title, 𝑥, sorted_idx, wᶠ, wᵉ, φᶠ, φᵉ)
+    println("\n", title)
     println("      x          w_FE          w_exact       |Δw|          φ_FE          φ_exact       |Δφ|")
-    for k in 次序
+    for k in sorted_idx
         @printf("%9.4f  %13.6e  %13.6e  %10.3e  %13.6e  %13.6e  %10.3e\n",
                 𝑥[k], wᶠ[k], wᵉ[k], abs(wᶠ[k]-wᵉ[k]),
                 φᶠ[k], φᵉ[k], abs(φᶠ[k]-φᵉ[k]))
@@ -155,8 +155,8 @@ function 打印对比(标题, 𝑥, 次序, wᶠ, wᵉ, φᶠ, φᵉ)
     @printf("全梁最大相对误差：w %.3e，φ %.3e\n", 𝑒ʷ, 𝑒ᵠ)
 end
 
-打印对比("=== 算例 1：均布荷载 q = $q N/m ===", 𝑥, 次序, wᶠ¹, wᵉ¹, φᶠ¹, φᵉ¹)
-打印对比("=== 算例 2：跨中集中力 P = $P N ===", 𝑥, 次序, wᶠ², wᵉ², φᶠ², φᵉ²)
+print_comparison("=== 算例 1：均布荷载 q = $q N/m ===", 𝑥, sorted_idx, wᶠ¹, wᵉ¹, φᶠ¹, φᵉ¹)
+print_comparison("=== 算例 2：跨中集中力 P = $P N ===", 𝑥, sorted_idx, wᶠ², wᵉ², φᶠ², φᵉ²)
 
 # 解写回节点（分块排列 ⇒ 每个节点 6 个分量），便于后续 VTK / 误差统计
 push!(nodes, :u₁=>[d₂[3i-2] for i in 1:nₚ], :u₂=>[d₂[3i-1] for i in 1:nₚ], :u₃=>[d₂[3i] for i in 1:nₚ],:φ₁=>[d₂[nᵤ+3i-2] for i in 1:nₚ], :φ₂=>[d₂[nᵤ+3i-1] for i in 1:nₚ], :φ₃=>[d₂[nᵤ+3i] for i in 1:nₚ])
