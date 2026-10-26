@@ -572,8 +572,7 @@ $N_IN_J$ 的形式出现，是 Timoshenko 梁刚度矩阵区别于 Euler--Bernou
 
 \subsection{刚度矩阵与程序算子的对应}
 
-理论推导得到的四个刚度块，在 ApproxOperator.jl 的 Beam 模块中都有对应的算子。
-算子命名与 thin\_shell.jl 的 $\int\varepsilon_{ij}N_{ij}\,d\Omega$ 风格一致，
+理论推导得到的四个刚度块，在 ApproxOperator.jl 的 Beam 模块中都有对应的算子，
 用广义应变与广义内力表示：
 \begin{equation}
 \int\varepsilon^{u}N^{u}\,d\Omega,\quad
