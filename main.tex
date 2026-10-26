@@ -5,23 +5,30 @@
 \usepackage{amsmath,amssymb,amsthm,bm}
 \usepackage{graphicx}
 \usepackage{tikz}
-\usetikzlibrary{positioning,arrows.meta,shapes.geometric,fit,backgrounds,calc}
+\usetikzlibrary{positioning,arrows.meta,fit}
 % 程序中的粗体数学符号 𝝭（U+1D76D），用 Segoe UI Symbol 显示
 \newfontfamily\bmsymbol{Segoe UI Symbol}
 \newcommand{\bM}{{\bmsymbol\char"1D76D}}
 \usepackage{booktabs}
 \usepackage{float}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 \usepackage{caption}
 \usepackage{enumitem}
 \usepackage[hidelinks]{hyperref}
 
 \captionsetup{font=small,labelsep=quad}
+\floatname{algorithm}{Algorithm}
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
 \tikzset{
-  flowbox/.style={draw, rounded corners, align=center, fill=blue!4, inner sep=3pt, font=\footnotesize},
-  flowio/.style={draw, trapezium, trapezium left angle=70, trapezium right angle=110,
-                 align=center, fill=green!8, inner sep=3pt, font=\footnotesize},
-  flowarr/.style={-{Latex[length=2mm]}, thick},
-  detailbox/.style={draw, rounded corners, align=left, fill=orange!4, inner sep=3pt, font=\scriptsize}
+  pbox/.style={draw, rounded corners=2pt, align=left, text width=6.2cm,
+               minimum width=6.6cm, inner sep=4pt, font=\scriptsize},
+  pio/.style={pbox, fill=green!10, align=center},
+  paux/.style={pbox, fill=cyan!8},
+  pcore/.style={pbox, fill=blue!10},
+  ppost/.style={pbox, fill=orange!10},
+  parr/.style={-{Latex[length=2mm]}, thick}
 }
 \setlength{\parskip}{0.35em}
 \setlength{\parindent}{2em}
@@ -858,40 +865,84 @@ k=-p.
 \section{程序实现流程}\label{sec:flow}
 
 图~\ref{fig:flow} 给出程序的总体流程：输入节点、拓扑、材料/截面与参考向量，
-位移场和转角场经形函数离散后分别组装刚度矩阵和荷载/边界，求解位移，最后做误差统计与内力后处理。
-刚度组装需要形函数及其一阶导数，使用带 $\nabla$ 的版本；边界与荷载算子只需形函数值，
-使用不带 $\nabla$ 的版本。
+经形函数离散后分别组装刚度矩阵和荷载/边界，求解位移，最后计算内力。
+与图~\ref{fig:flow} 对应的逐步实现见 Algorithm~\ref{alg:flow}，其中每一步说明该步的目的、
+调用的子程序，以及所依据的公式。
 
 \begin{figure}[H]
 \centering
-\resizebox{0.9\textwidth}{!}{%
+\resizebox{0.95\textwidth}{!}{%
 \begin{tikzpicture}[
-  box/.style={draw, rounded corners=2pt, align=center, text width=5.4cm,
-              minimum width=5.8cm, inner sep=4pt, font=\scriptsize},
-  core/.style={box, fill=blue!10},
-  aux/.style={box, fill=cyan!8},
-  io/.style={box, fill=green!10},
-  post/.style={box, fill=orange!10},
-  arr/.style={-{Latex[length=2mm]}, thick}]
-\node[io] (input) at (0,0) {\textbf{输入}\\ 节点 \texttt{get}$\boldsymbol{X}_i$，拓扑 \texttt{getElements}\\ 材料/截面 \texttt{prescribe!}，参考向量 $\mathbf{R}(ap)$};
-\node[aux, below=8mm of input] (pre) {\textbf{形函数与导数}\\ $\mathrm{set}\nabla\text{\bM}!$：$N_I,\partial N_I/\partial x$\\ $\mathrm{set}\text{\bM}!$：仅 $N_I$\\ 一点 Gauss};
-\node[core, minimum height=2.6cm, below=12mm of pre, xshift=-3.2cm] (stiff) {\textbf{刚度矩阵}\\ $\int\varepsilon^{u}N^{u}d\Omega$，$\int\varepsilon^{u}N^{\varphi}d\Omega$\\ $\int\varepsilon^{\varphi}N^{u}d\Omega$，$\int\varepsilon^{\varphi}N^{\varphi}d\Omega$\\ 组装 $\mathbf{k}=\left[\begin{smallmatrix}\mathbf{K}^{uu}&\mathbf{K}^{u\varphi}\\\mathbf{K}^{\varphi u}&\mathbf{K}^{\varphi\varphi}\end{smallmatrix}\right]$};
-\node[aux, minimum height=2.6cm, below=12mm of pre, xshift=3.2cm] (loadbc) {\textbf{荷载与边界}\\ 均布荷载 $\int v_i b_i d\Omega$\\ 集中力/面力 $\int v_i t_i d\Gamma$\\ 罚函数 $\int d_i g_i d\Gamma$};
+  box/.style={draw, rounded corners=2pt, align=center, text width=6.0cm,
+              minimum width=6.6cm, inner sep=5pt, font=\small},
+  pio/.style={box, fill=green!10},
+  paux/.style={box, fill=cyan!8},
+  pcore/.style={box, fill=blue!10},
+  ppost/.style={box, fill=orange!10},
+  parr/.style={-{Latex[length=2.5mm]}, thick}]
+\node[pio] (input) at (0,0) {\textbf{读取模型}\\ 节点 \texttt{get}$\boldsymbol{X}_i$，拓扑 \texttt{getElements}\\ 材料/截面 \texttt{prescribe!}，参考向量 $\mathbf{r}$};
+\node[paux, below=10mm of input] (pre) {\textbf{计算形函数}\\
+$\mathrm{set}\nabla\text{\bM}!$：$N_I,\partial N_I/\partial x$\\
+$\mathrm{set}\text{\bM}!$：仅 $N_I$\\
+一点 Gauss};
+\node[pcore, below=14mm of pre, xshift=-4.1cm, minimum height=3.8cm] (stiff) {\textbf{装配刚度}\\
+$\int\varepsilon^{u}N^{u}\ud\Omega$，$\int\varepsilon^{u}N^{\varphi}\ud\Omega$\\
+$\int\varepsilon^{\varphi}N^{u}\ud\Omega$，$\int\varepsilon^{\varphi}N^{\varphi}\ud\Omega$\\
+组装 $\mathbf{K}=\begin{bmatrix}\mathbf{K}^{uu}&\mathbf{K}^{u\varphi}\\[2pt]\mathbf{K}^{\varphi u}&\mathbf{K}^{\varphi\varphi}\end{bmatrix}$};
+\node[paux, below=14mm of pre, xshift=4.1cm, minimum height=3.8cm] (loadbc) {\textbf{形成荷载与边界}\\
+均布荷载：$\int N_I b_i\ud\Omega$\\
+集中力/面力：$\int N_I t_i\ud\Gamma$\\
+强制边界：罚函数 $\int d_i g_i\ud\Gamma$\\
+自然边界：不约束相应自由度};
 \node[fit=(stiff)(loadbc), inner sep=0pt] (row3) {};
-\node[core, below=12mm of row3] (solve) {\textbf{求解}\\ $\mathbf{d}=\mathbf{k}\backslash\mathbf{f}$};
-\node[post, below=12mm of solve, xshift=-3.2cm] (post) {\textbf{后处理}\\ $L_2d$：位移/转角误差\\ 由 $\mathbf{d}$ 求 $N,Q,M$};
-\node[io, below=12mm of solve, xshift=3.2cm] (output) {\textbf{输出}\\ 轴力 $N$，剪力 $Q_2,Q_3$\\ 弯矩 $M_2,M_3$，扭矩 $M_1$};
-\draw[arr] (input)--(pre);
-\draw[arr] (pre.south)--++(0,-6mm)-|(stiff.north);
-\draw[arr] (pre.south)--++(0,-6mm)-|(loadbc.north);
-\draw[arr] (stiff.south)|-(solve.west);
-\draw[arr] (loadbc.south)|-(solve.east);
-\draw[arr] (solve.south)--++(0,-6mm)-|(post.north);
-\draw[arr] (solve.south)--++(0,-6mm)-|(output.north);
+\node[pcore, below=14mm of row3] (solve) {\textbf{求解位移}\\[1pt] $\mathbf{d}=\mathbf{K}\backslash\mathbf{f}$};
+\node[ppost, below=14mm of solve, xshift=-4.1cm, minimum height=2.4cm] (post) {\textbf{计算内力}\\
+由 $\mathbf{d}$ 求 $\varepsilon,\gamma,\kappa$\\
+再求 $N,Q,M$};
+\node[pio, below=14mm of solve, xshift=4.1cm, minimum height=2.4cm] (output) {\textbf{输出结果}\\
+轴力 $N$，剪力 $Q_2,Q_3$\\
+弯矩 $M_2,M_3$，扭矩 $M_1$};
+\draw[parr] (input)--(pre);
+\draw[parr] (pre.south)--++(0,-7mm)-|(stiff.north);
+\draw[parr] (pre.south)--++(0,-7mm)-|(loadbc.north);
+\draw[parr] (stiff.south)|-(solve.west);
+\draw[parr] (loadbc.south)|-(solve.east);
+\draw[parr] (solve.south)--++(0,-7mm)-|(post.north);
+\draw[parr] (solve.south)--++(0,-7mm)-|(output.north);
 \end{tikzpicture}}
-\caption{程序实现流程：输入 $\rightarrow$ 刚度/荷载与边界 $\rightarrow$ 求解 $\rightarrow$ 后处理与输出}
+\caption{程序实现流程}
 \label{fig:flow}
 \end{figure}
+
+\begin{algorithm}[H]
+\caption{三维 Timoshenko 梁单元分析流程}
+\label{alg:flow}
+\begin{algorithmic}[1]
+\Require 节点、物理组、单元连接、材料/截面、参考向量 $\mathbf{r}$
+\Ensure 位移 $\mathbf{d}$；轴力 $N$、剪力 $Q_2,Q_3$、弯矩 $M_2,M_3$、扭矩 $M_1$
+\State \textbf{读取网格}：用 \texttt{get}$\boldsymbol{X}_i$、\texttt{getPhysicalGroups()}、\texttt{getElements}($\cdot,1$) 读入节点、物理组与单元
+\State \textbf{赋材料与截面}：用 \texttt{prescribe!} 写入 $E,G,A,I_{yy},I_{zz},k_2,k_3$，供截面刚度使用
+\State \textbf{计算形函数}：用 $\mathrm{set}\nabla\text{\bM}!$、$\mathrm{set}\text{\bM}!$ 在 Gauss 点上计算 $N_I$ 与 $\partial N_I/\partial x$（式~\eqref{eq:deriv}、\eqref{eq:shape}）
+\For{每个单元 $e$}
+  \State \textbf{构造局部标架}：由两端点用 $\mathbf{R}(ap)$ 确定局部标架（式~\eqref{eq:R}、\eqref{eq:ex}）
+  \State \textbf{计算截面刚度块}：形成 $\mathrm{diag}(EA,k_2GA,k_3GA)$ 及弯曲、剪切子块（式~\eqref{eq:Kuu}--\eqref{eq:Kpp}）
+  \State \textbf{变换并累加}：对各子块用 $\mathbf{R}^{\mathsf T}\mathbf{K}\mathbf{R}$ 转到整体坐标，累加到 $\mathbf{K}^{uu},\mathbf{K}^{u\varphi},\mathbf{K}^{\varphi u},\mathbf{K}^{\varphi\varphi}$（式~\eqref{eq:Kglobal-block}）
+\EndFor
+\State \textbf{组装整体刚度}
+\Statex \hspace*{2em}\qquad $\mathbf{K}^{uu}=\int\varepsilon^{u}N^{u}\ud\Omega$，$\mathbf{K}^{u\varphi}=\int\varepsilon^{u}N^{\varphi}\ud\Omega$
+\Statex \hspace*{2em}\qquad $\mathbf{K}^{\varphi u}=\int\varepsilon^{\varphi}N^{u}\ud\Omega$，$\mathbf{K}^{\varphi\varphi}=\int\varepsilon^{\varphi}N^{\varphi}\ud\Omega$
+\Statex \hspace*{2em}\qquad $\mathbf{K}=\begin{bmatrix}\mathbf{K}^{uu}&\mathbf{K}^{u\varphi}\\ \mathbf{K}^{\varphi u}&\mathbf{K}^{\varphi\varphi}\end{bmatrix}$（式~\eqref{eq:global}）
+\State \textbf{形成等效荷载}：$f_I\mathrel{+}=\int N_I b_i\ud\Omega+\int N_I t_i\ud\Gamma$（式~\eqref{eq:bodyload}、\eqref{eq:traction}）
+\State \textbf{施加本质边界}：用罚函数 $\int d_i g_i\ud\Gamma$，即 $K_{II}\mathrel{+}=\alpha$、$f_I\mathrel{+}=\alpha g_I$（式~\eqref{eq:penalty}、\eqref{eq:penalty-disc}）
+\State \textbf{自然边界}：对应自由度不加约束，端部剪力、弯矩自动为零
+\State \textbf{求解位移}：解 $\mathbf{K}\mathbf{d}=\mathbf{f}$，得到节点位移与转角（式~\eqref{eq:final-global}）
+\State \textbf{计算正应变与剪应变}：$\varepsilon=u_{1,1}$，$\gamma_2=u_{2,1}-\varphi_3$，$\gamma_3=u_{3,1}+\varphi_2$（式~\eqref{eq:gstrain}）
+\State \textbf{计算扭转率与曲率}：$\kappa_1=\varphi_{1,1}$，$\kappa_2=\varphi_{2,1}$，$\kappa_3=\varphi_{3,1}$（式~\eqref{eq:gstrain}）
+\State \textbf{计算轴力与剪力}：$N=EA\varepsilon$，$Q_2=k_2GA\gamma_2$，$Q_3=k_3GA\gamma_3$（式~\eqref{eq:gforce}、\eqref{eq:Cmatrix}）
+\State \textbf{计算弯矩与扭矩}：$M_1=G(I_{yy}+I_{zz})\kappa_1$，$M_2=EI_{yy}\kappa_2$，$M_3=EI_{zz}\kappa_3$（式~\eqref{eq:gforce}、\eqref{eq:Cmatrix}）
+\State \Return $\mathbf{d},N,Q_2,Q_3,M_1,M_2,M_3$
+\end{algorithmic}
+\end{algorithm}
 
 % =====================================================================
 \part{数值算例}
