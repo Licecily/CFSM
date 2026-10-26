@@ -876,7 +876,7 @@ k=-p.
 \node[io] (input) at (0,0) {\textbf{输入}\\ 节点 \texttt{get}$\boldsymbol{X}_i$，拓扑 \texttt{getElements}\\ 材料/截面 \texttt{prescribe!}，参考向量 $\mathbf{R}(ap)$};
 \node[aux, below=8mm of input] (pre) {\textbf{形函数与导数}\\ $\mathrm{set}\nabla\text{\bM}!$：$N_I,\partial N_I/\partial x$\\ $\mathrm{set}\text{\bM}!$：仅 $N_I$\\ 一点 Gauss};
 \node[core, minimum height=2.6cm, below=12mm of pre, xshift=-3.2cm] (stiff) {\textbf{刚度矩阵}\\ $\int\varepsilon^{u}N^{u}d\Omega$，$\int\varepsilon^{u}N^{\varphi}d\Omega$\\ $\int\varepsilon^{\varphi}N^{u}d\Omega$，$\int\varepsilon^{\varphi}N^{\varphi}d\Omega$\\ 组装 $\mathbf{k}=\left[\begin{smallmatrix}\mathbf{K}^{uu}&\mathbf{K}^{u\varphi}\\\mathbf{K}^{\varphi u}&\mathbf{K}^{\varphi\varphi}\end{smallmatrix}\right]$};
-\node[aux, minimum height=2.6cm, below=12mm of pre, xshift=3.2cm] (loadbc) {\textbf{荷载与边界}\\ 分布荷载 $\int v_i b_i d\Omega$\\ 集中力/面力 $\int v_i t_i d\Gamma$\\ 罚函数 $\int d_i g_i d\Gamma$};
+\node[aux, minimum height=2.6cm, below=12mm of pre, xshift=3.2cm] (loadbc) {\textbf{荷载与边界}\\ 均布荷载 $\int v_i b_i d\Omega$\\ 集中力/面力 $\int v_i t_i d\Gamma$\\ 罚函数 $\int d_i g_i d\Gamma$};
 \node[fit=(stiff)(loadbc), inner sep=0pt] (row3) {};
 \node[core, below=12mm of row3] (solve) {\textbf{求解}\\ $\mathbf{d}=\mathbf{k}\backslash\mathbf{f}$};
 \node[post, below=12mm of solve, xshift=-3.2cm] (post) {\textbf{后处理}\\ $L_2d$：位移/转角误差\\ 由 $\mathbf{d}$ 求 $N,Q,M$};
