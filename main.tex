@@ -57,7 +57,7 @@
 本报告基于三维 Timoshenko 梁理论，建立了每个节点含三个位移分量与三个转角分量的
 两节点梁单元。第一部分从运动学假设出发，推导了应变场、截面广义内力、虚功弱形式、
 有限元离散格式、局部坐标到整体坐标的变换，以及罚函数边界条件的实现方式。
-第二部分采用 ApproxOperator.jl 中 Beam 模块的 Seg2 单元，对固支梁、悬臂梁和简支梁
+第二部分采用 ApproxOperator 中 Beam 模块的 Seg2 单元，对固支梁、悬臂梁和简支梁
 三种支承条件分别进行分片试验与 $L_2$ 误差收敛研究。三个方向的分片试验相对误差均在
 $10^{-7}$ 量级；在均布荷载与集中荷载下，位移与转角的相对 $L_2$ 误差都随网格加密
 以 $O(h^2)$ 的最优阶收敛，双对数斜率稳定在 $-2$ 附近，说明该单元满足完备性、
@@ -350,11 +350,6 @@ b_1\delta u_1+b_2\delta u_2+b_3\delta u_3
 +\delta\varphi_3\left(M_{3,1}+Q_2\right)\Big]\ud x.
 \end{aligned}
 \end{equation}
-式~\eqref{eq:byparts} 右端第二行中的六个方括号项，正是 3D.md 中所列的
-“体积力虚功”表达式（符号相差一个整体负号，取决于把内部虚功移到等式哪一侧）。
-它并不是外荷载的虚功，而是内部虚功分部积分后的域内项，其系数恰好给出梁的
-平衡微分方程。
-
 令 $\delta W_{int}=\delta W_{ext}$，并利用虚位移的任意性，得到梁的强形式平衡方程：
 \begin{equation}\label{eq:strong}
 \boxed{
@@ -572,7 +567,7 @@ $N_IN_J$ 的形式出现，是 Timoshenko 梁刚度矩阵区别于 Euler--Bernou
 
 \subsection{刚度矩阵与程序算子的对应}
 
-理论推导得到的四个刚度块，在 ApproxOperator.jl 的 Beam 模块中都有对应的算子，
+理论推导得到的四个刚度块，在 ApproxOperator 的 Beam 模块中都有对应的算子，
 用广义应变与广义内力表示：
 \begin{equation}
 \int\varepsilon^{u}N^{u}\,d\Omega,\quad
