@@ -1,7 +1,7 @@
 
 using ApproxOperator
 import ApproxOperator.GmshImport: getPhysicalGroups, get𝑿ᵢ, getElements
-import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, ∫dᵢgᵢdΓ
+import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, ∫uᵢgᵢdΓ, ∫φᵢgᵢdΓ
 import ApproxOperator.Elasticity: ∫vᵢbᵢdΩ, ∫vᵢtᵢdΓ
 import Gmsh: gmsh
 using LinearAlgebra
@@ -65,7 +65,6 @@ set∇𝝭!(elements)          # 同时备好 𝝭 与 ∂𝝭∂x
 𝑎₂(𝐊ᵘᵠ)
 𝑎₃(𝐊ᵠᵘ)
 𝑎₄(𝐊ᵠᵠ)
-𝐤 = [𝐊ᵘᵘ 𝐊ᵘᵠ; 𝐊ᵠᵘ 𝐊ᵠᵠ]
 
 # ===================== 5. 边界条件：Γ¹、Γ² 两端固定（罚函数）=====================
 # 罚项：∫δdᵢ α (gᵢ − dᵢ) dΓ → 对角刚度 += α NᵢNⱼ，右端项 += α Nᵢ gᵢ（Poi1 单元 N=1、𝑤=1）
@@ -76,35 +75,41 @@ const α = 1.0e13
 elements_Γ¹ = getElements(nodes, entities["Γ¹"])        # entities[name] 本身就是 dim => tags
 prescribe!(elements_Γ¹, :α=>α,:g₁=>0.0, :g₂=>0.0, :g₃=>0.0,:g₄=>0.0, :g₅=>0.0, :g₆=>0.0)  
 set𝝭!(elements_Γ¹)
-𝑏₂¹ = ∫dᵢgᵢdΓ => elements_Γ¹
+𝑏₂¹ᵘ = ∫uᵢgᵢdΓ => elements_Γ¹
+𝑏₂¹ᵠ = ∫φᵢgᵢdΓ => elements_Γ¹
 
 elements_Γ² = getElements(nodes, entities["Γ²"])
 prescribe!(elements_Γ², :α=>α,:g₁=>0.0, :g₂=>0.0, :g₃=>0.0,:g₄=>0.0, :g₅=>0.0, :g₆=>0.0)
 set𝝭!(elements_Γ²)
-𝑏₂² = ∫dᵢgᵢdΓ => elements_Γ²
+𝑏₂²ᵘ = ∫uᵢgᵢdΓ => elements_Γ²
+𝑏₂²ᵠ = ∫φᵢgᵢdΓ => elements_Γ²
 
-𝐤ᵦ = copy(𝐤)                       # 加罚项后的刚度矩阵（保留原 𝐤 备用）
-fα = zeros(6nₚ)                    # 罚项对右端项的贡献（齐次固定端时为 0）
-𝑏₂¹(𝐤ᵦ, fα)
-𝑏₂²(𝐤ᵦ, fα)
+𝐊ᵘᵘα = zeros(3nₚ, 3nₚ)
+𝐊ᵠᵠα = zeros(3nₚ, 3nₚ)
+fᵘα = zeros(3nₚ)
+fᵠα = zeros(3nₚ)
+𝑏₂¹ᵘ(𝐊ᵘᵘα, fᵘα); 𝑏₂¹ᵠ(𝐊ᵠᵠα, fᵠα)
+𝑏₂²ᵘ(𝐊ᵘᵘα, fᵘα); 𝑏₂²ᵠ(𝐊ᵠᵠα, fᵠα)
+𝐊 = [𝐊ᵘᵘ + 𝐊ᵘᵘα  𝐊ᵘᵠ;
+      𝐊ᵠᵘ          𝐊ᵠᵠ + 𝐊ᵠᵠα]
 
-# ===================== 6. 两个算例：d = 𝐤 \ f =====================
+# ===================== 6. 两个算例：d = 𝐊 \ f =====================
 𝐼ₘ = argmin(abs.(nodes.x .- L/2))        # 跨中节点（beam.geo 的 n 取偶数则有节点落在跨中）
 
 # --- 算例 1：整体 Y 向均布荷载 q ---
-f = zeros(6nₚ)
+fᵘ = zeros(3nₚ)
 prescribe!(elements, :b₁=>0.0, :b₂=>q, :b₃=>0.0)   # b 是整体坐标分量上的线荷载 (N/m)
 𝑏₁ = ∫vᵢbᵢdΩ => elements                            # f[3I-1] += ∫ N_I b₂ ds
-𝑏₁(f)
-f .+= fα
-d₁ = 𝐤ᵦ \ f
+𝑏₁(fᵘ)
+f = [fᵘ .+ fᵘα; fᵠα]
+d₁ = 𝐊 \ f
 
 # --- 算例 2：跨中集中力 P ---
 # 这里直接写自由度；若要用算子，见第 8 节"端部集中力"的写法。
-f = zeros(6nₚ)
-f[3𝐼ₘ-1] = P
-f .+= fα
-d₂ = 𝐤ᵦ \ f
+fᵘ = zeros(3nₚ)
+fᵘ[3𝐼ₘ-1] = P
+f = [fᵘ .+ fᵘα; fᵠα]
+d₂ = 𝐊 \ f
 
 # ===================== 7. 全梁精确解与逐节点对照 =====================
 # 梁沿整体 X，局部 y = 整体 Z、局部 z = −整体 Y（3D.md 7.2），所以整体 Y 向

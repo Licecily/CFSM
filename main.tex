@@ -788,25 +788,35 @@ $\delta\bD_l^{\mathsf T}\bK_l\bD_l=\delta\bD_l^{\mathsf T}\bff_l$，得到
 \subsection{罚函数边界条件}
 
 本质边界条件（给定位移或转角）采用罚函数法施加。对边界 $\Gamma_g$ 上给定的
-自由度 $g_i$，在弱形式中增加罚项
+位移分量 $g_i^{u}$ 与转角分量 $g_i^{\varphi}$（$i=1,2,3$），在弱形式中分别增加罚项
 \begin{equation}\label{eq:penalty}
-\delta\Pi_\alpha=\int_{\Gamma_g}\alpha\,\delta d_i\left(g_i-d_i\right)\ud\Gamma,
+\begin{aligned}
+\delta\Pi_\alpha^{u}&=\int_{\Gamma_g}\alpha\,\delta u_i\left(g_i^{u}-u_i\right)\ud\Gamma,\\
+\delta\Pi_\alpha^{\varphi}&=\int_{\Gamma_g}\alpha\,\delta\varphi_i\left(g_i^{\varphi}-\varphi_i\right)\ud\Gamma,
+\end{aligned}
 \end{equation}
-其中 $\alpha\gg1$ 为罚参数。对节点上的单点约束（梁的端点），形函数取 1，
-罚项对刚度矩阵与荷载向量的贡献为
+其中 $\alpha\gg1$ 为罚参数。位移与转角分属两个 $3n_p$ 的自由度块，罚项也按块施加：
+对节点上的单点约束（梁的端点），形函数取 1，两个块的刚度和右端项分别得到
 \begin{equation}\label{eq:penalty-disc}
-K_{II}\leftarrow K_{II}+\alpha,\qquad
-f_I\leftarrow f_I+\alpha g_I.
+\begin{aligned}
+\bK^{uu}_{II}&\leftarrow\bK^{uu}_{II}+\alpha, &
+\bff^{u}_I&\leftarrow\bff^{u}_I+\alpha g^{u}_I,\\
+\bK^{\varphi\varphi}_{II}&\leftarrow\bK^{\varphi\varphi}_{II}+\alpha, &
+\bff^{\varphi}_I&\leftarrow\bff^{\varphi}_I+\alpha g^{\varphi}_I.
+\end{aligned}
 \end{equation}
-当 $g_I=0$（齐次约束）时，右端项不变，只需在对应自由度对角线上加 $\alpha$。
+程序中对应两个算子：位移块用 $\int u_i g_i\ud\Gamma$，转角块用
+$\int\varphi_i g_i\ud\Gamma$。整体刚度按
+$\bK^{uu}$、$\bK^{u\varphi}$、$\bK^{\varphi u}$、$\bK^{\varphi\varphi}$ 四个块组装。
+当给定值为零（齐次约束）时，右端项不变，只需在对应块的对角线上加 $\alpha$。
 罚参数越大，约束残差越小（约为 $1/\alpha$），但刚度矩阵的条件数也随之增大
 （约为 $\alpha/\lambda_{\min}$）。本报告取 $\alpha=10^{15}$，此时约束残差
 远小于网格离散误差，同时双精度运算仍能保持稳定。
 
-对于只约束部分自由度的支座（如简支梁的铰支座与滚动支座），程序直接按自由度
-编号在对角线上加罚，而不使用一次约束全部 6 个分量的罚算子。这是因为梁的
-6 个自由度在支座处并非都需要约束：简支端只约束挠度与侧向位移，弯矩为零的
-条件要求转角自由；若错误地约束全部 6 个分量，就变成了固支端。
+对于只约束部分自由度的支座（如简支梁的铰支座与滚动支座），上述算子会一次
+约束所在块的全部三个分量，不能直接使用；程序改为按自由度编号在 $\bK^{uu}$
+或 $\bK^{\varphi\varphi}$ 的对应对角线上加 $\alpha$。简支端只约束挠度与侧向
+位移，弯矩为零的条件要求转角自由；若把转角块也全部约束，就变成了固支端。
 
 \subsection{分布荷载与集中荷载}
 
@@ -885,7 +895,8 @@ $\int\varepsilon^{\varphi}N^{u}\ud\Omega$，$\int\varepsilon^{\varphi}N^{\varphi
 \node[paux, below=14mm of pre, xshift=4.1cm, minimum height=3.8cm] (loadbc) {\textbf{形成荷载与边界}\\
 均布荷载：$\int N_I b_i\ud\Omega$\\
 集中力/面力：$\int N_I t_i\ud\Gamma$\\
-强制边界：罚函数 $\int d_i g_i\ud\Gamma$\\
+强制边界：$\int u_i g_i\ud\Gamma$\\
+\quad $\int\varphi_i g_i\ud\Gamma$\\
 自然边界：不约束相应自由度};
 \node[fit=(stiff)(loadbc), inner sep=0pt] (row3) {};
 \node[pcore, below=14mm of row3] (solve) {\textbf{求解位移}\\[1pt] $\mathbf{d}=\mathbf{K}\backslash\mathbf{f}$};
@@ -926,7 +937,7 @@ $\int\varepsilon^{\varphi}N^{u}\ud\Omega$，$\int\varepsilon^{\varphi}N^{\varphi
 \Statex \hspace*{2em}\qquad $\mathbf{K}^{\varphi u}=\int\varepsilon^{\varphi}N^{u}\ud\Omega$，$\mathbf{K}^{\varphi\varphi}=\int\varepsilon^{\varphi}N^{\varphi}\ud\Omega$
 \Statex \hspace*{2em}\qquad $\mathbf{K}=\begin{bmatrix}\mathbf{K}^{uu}&\mathbf{K}^{u\varphi}\\ \mathbf{K}^{\varphi u}&\mathbf{K}^{\varphi\varphi}\end{bmatrix}$（式~\eqref{eq:global}）
 \State \textbf{形成等效荷载}：$f_I\mathrel{+}=\int N_I b_i\ud\Omega+\int N_I t_i\ud\Gamma$（式~\eqref{eq:bodyload}、\eqref{eq:traction}）
-\State \textbf{施加本质边界}：用罚函数 $\int d_i g_i\ud\Gamma$，即 $K_{II}\mathrel{+}=\alpha$、$f_I\mathrel{+}=\alpha g_I$（式~\eqref{eq:penalty}、\eqref{eq:penalty-disc}）
+\State \textbf{施加本质边界}：用 $\int u_i g_i\ud\Gamma$、$\int\varphi_i g_i\ud\Gamma$ 分别写入 $\mathbf{K}^{uu}$、$\mathbf{K}^{\varphi\varphi}$ 及对应右端项（式~\eqref{eq:penalty}、\eqref{eq:penalty-disc}）
 \State \textbf{自然边界}：对应自由度不加约束，端部剪力、弯矩自动为零
 \State \textbf{求解位移}：解 $\mathbf{K}\mathbf{d}=\mathbf{f}$，得到节点位移与转角（式~\eqref{eq:final-global}）
 \State \textbf{计算正应变与剪应变}：$\varepsilon=u_{1,1}$，$\gamma_2=u_{2,1}-\varphi_3$，$\gamma_3=u_{3,1}+\varphi_2$（式~\eqref{eq:gstrain}）

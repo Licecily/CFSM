@@ -80,7 +80,6 @@ function solve_mesh(n)
     𝑎₂(𝐊ᵘᵠ)
     𝑎₃(𝐊ᵠᵘ)
     𝑎₄(𝐊ᵠᵠ)
-    𝐤 = [𝐊ᵘᵘ 𝐊ᵘᵠ; 𝐊ᵠᵘ 𝐊ᵠᵠ]
 
     # 简支边界：Γ¹ 铰支座（u₁、u₂、u₃、φ₁），Γ² 滚动支座（u₂、u₃）
     # 只约束部分自由度，用对角罚项（齐次约束 g=0，右端项不变）
@@ -88,20 +87,27 @@ function solve_mesh(n)
     i¹ = argmin(abs.(𝑥))
     i² = argmin(abs.(𝑥 .- L))
 
-    𝐤ᵦ = copy(𝐤)
-    for p in (3i¹-2, 3i¹-1, 3i¹, nᵤ+3i¹-2)
-        𝐤ᵦ[p,p] += α
+    𝐊ᵘᵘα = zeros(3nₚ, 3nₚ)
+    𝐊ᵠᵠα = zeros(3nₚ, 3nₚ)
+    for p in (3i¹-2, 3i¹-1, 3i¹)
+        𝐊ᵘᵘα[p,p] += α
     end
+    𝐊ᵠᵠα[3i¹-2,3i¹-2] += α
     for p in (3i²-1, 3i²)
-        𝐤ᵦ[p,p] += α
+        𝐊ᵘᵘα[p,p] += α
     end
+    fᵘα = zeros(3nₚ)
+    fᵠα = zeros(3nₚ)
+    𝐊 = [𝐊ᵘᵘ + 𝐊ᵘᵘα  𝐊ᵘᵠ;
+          𝐊ᵠᵘ          𝐊ᵠᵠ + 𝐊ᵠᵠα]
 
     # 跨中集中力
-    f = zeros(6nₚ)
     𝐼ₘ = argmin(abs.(𝑥 .- L/2))
-    f[3𝐼ₘ-1] = P
+    fᵘ = zeros(3nₚ)
+    fᵘ[3𝐼ₘ-1] = P
+    f = [fᵘ .+ fᵘα; fᵠα]
 
-    d = 𝐤ᵦ \ f
+    d = 𝐊 \ f
 
     push!(nodes,
           :d₁=>[d[3i-2] for i in 1:nₚ], :d₂=>[d[3i-1] for i in 1:nₚ], :d₃=>[d[3i] for i in 1:nₚ],

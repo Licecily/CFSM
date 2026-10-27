@@ -1,6 +1,6 @@
 using ApproxOperator
 import ApproxOperator.GmshImport: getPhysicalGroups, get𝑿ᵢ, getElements
-import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, ∫dᵢgᵢdΓ, L₂d
+import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, ∫uᵢgᵢdΓ, ∫φᵢgᵢdΓ, L₂d
 import Gmsh: gmsh
 using LinearAlgebra
 using Printf
@@ -82,7 +82,6 @@ set∇𝝭!(elements)
 𝑎₂(𝐊ᵘᵠ)
 𝑎₃(𝐊ᵠᵘ)
 𝑎₄(𝐊ᵠᵠ)
-𝐤 = [𝐊ᵘᵘ 𝐊ᵘᵠ; 𝐊ᵠᵘ 𝐊ᵠᵠ]
 
 # ===================== 5. 边界施加精确场（罚函数）=====================
 # 与 sample.jl 的 ∫αwwdΓ、∫αφφdΓ 相同：直接传精确场函数，由算子在各积分点取值。
@@ -93,20 +92,27 @@ elements_Γ¹ = getElements(nodes, entities["Γ¹"])
 prescribe!(elements_Γ¹, :α=>α,
            :g₁=>u₁, :g₂=>u₂, :g₃=>u₃, :g₄=>φ₁, :g₅=>φ₂, :g₆=>φ₃)
 set𝝭!(elements_Γ¹)
-𝑏¹ = ∫dᵢgᵢdΓ => elements_Γ¹
+𝑏¹ᵘ = ∫uᵢgᵢdΓ => elements_Γ¹
+𝑏¹ᵠ = ∫φᵢgᵢdΓ => elements_Γ¹
 
 elements_Γ² = getElements(nodes, entities["Γ²"])
 prescribe!(elements_Γ², :α=>α,
            :g₁=>u₁, :g₂=>u₂, :g₃=>u₃, :g₄=>φ₁, :g₅=>φ₂, :g₆=>φ₃)
 set𝝭!(elements_Γ²)
-𝑏² = ∫dᵢgᵢdΓ => elements_Γ²
+𝑏²ᵘ = ∫uᵢgᵢdΓ => elements_Γ²
+𝑏²ᵠ = ∫φᵢgᵢdΓ => elements_Γ²
 
 # 无分布荷载，右端项只有罚项贡献 α N_I g_I
-𝐤ᵦ = copy(𝐤)
-f  = zeros(6nₚ)
-𝑏¹(𝐤ᵦ, f)
-𝑏²(𝐤ᵦ, f)
-d = 𝐤ᵦ \ f
+𝐊ᵘᵘα = zeros(3nₚ, 3nₚ)
+𝐊ᵠᵠα = zeros(3nₚ, 3nₚ)
+fᵘα = zeros(3nₚ)
+fᵠα = zeros(3nₚ)
+𝑏¹ᵘ(𝐊ᵘᵘα, fᵘα); 𝑏¹ᵠ(𝐊ᵠᵠα, fᵠα)
+𝑏²ᵘ(𝐊ᵘᵘα, fᵘα); 𝑏²ᵠ(𝐊ᵠᵠα, fᵠα)
+𝐊 = [𝐊ᵘᵘ + 𝐊ᵘᵘα  𝐊ᵘᵠ;
+      𝐊ᵠᵘ          𝐊ᵠᵠ + 𝐊ᵠᵠα]
+f = [fᵘα; fᵠα]
+d = 𝐊 \ f
 
 # 把有限元解写回节点，供 L₂d 读取（d₁..d₃ = u₁..u₃，d₄..d₆ = φ₁..φ₃）
 push!(nodes,

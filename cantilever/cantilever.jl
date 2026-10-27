@@ -1,6 +1,6 @@
 using ApproxOperator
 import ApproxOperator.GmshImport: getPhysicalGroups, get𝑿ᵢ, getElements
-import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, ∫dᵢgᵢdΓ, L₂d
+import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, ∫uᵢgᵢdΓ, ∫φᵢgᵢdΓ, L₂d
 import ApproxOperator.Elasticity: ∫vᵢbᵢdΩ, ∫vᵢtᵢdΓ
 import Gmsh: gmsh
 using LinearAlgebra
@@ -57,7 +57,6 @@ set∇𝝭!(elements)
 𝑎₂(𝐊ᵘᵠ)
 𝑎₃(𝐊ᵠᵘ)
 𝑎₄(𝐊ᵠᵠ)
-𝐤 = [𝐊ᵘᵘ 𝐊ᵘᵠ; 𝐊ᵠᵘ 𝐊ᵠᵠ]
 
 # ===================== 5. 边界条件：仅 Γ¹ 固定（罚函数）=====================
 # Γ² 自由端不约束；固定端 6 个自由度全部约束。
@@ -69,30 +68,36 @@ prescribe!(elements_Γ¹, :α=>α,
                          :g₁=>0.0, :g₂=>0.0, :g₃=>0.0,
                          :g₄=>0.0, :g₅=>0.0, :g₆=>0.0)
 set𝝭!(elements_Γ¹)
-𝑏₂¹ = ∫dᵢgᵢdΓ => elements_Γ¹
+𝑏₂ᵘ = ∫uᵢgᵢdΓ => elements_Γ¹
+𝑏₂ᵠ = ∫φᵢgᵢdΓ => elements_Γ¹
 
-𝐤ᵦ = copy(𝐤)
-fα = zeros(6nₚ)
-𝑏₂¹(𝐤ᵦ, fα)
+𝐊ᵘᵘα = zeros(3nₚ, 3nₚ)
+𝐊ᵠᵠα = zeros(3nₚ, 3nₚ)
+fᵘα = zeros(3nₚ)
+fᵠα = zeros(3nₚ)
+𝑏₂ᵘ(𝐊ᵘᵘα, fᵘα)
+𝑏₂ᵠ(𝐊ᵠᵠα, fᵠα)
+𝐊 = [𝐊ᵘᵘ + 𝐊ᵘᵘα  𝐊ᵘᵠ;
+      𝐊ᵠᵘ          𝐊ᵠᵠ + 𝐊ᵠᵠα]
 
 # ===================== 6. 两个算例 =====================
 # --- 算例 1：整体 Y 向均布荷载 q ---
-f = zeros(6nₚ)
+fᵘ = zeros(3nₚ)
 prescribe!(elements, :b₁=>0.0, :b₂=>q, :b₃=>0.0)
 𝑏₁ = ∫vᵢbᵢdΩ => elements
-𝑏₁(f)
-f .+= fα
-d₁ = 𝐤ᵦ \ f
+𝑏₁(fᵘ)
+f = [fᵘ .+ fᵘα; fᵠα]
+d₁ = 𝐊 \ f
 
 # --- 算例 2：自由端集中力 P ---
 elements_Γ² = getElements(nodes, entities["Γ²"])
 set𝝭!(elements_Γ²)
 prescribe!(elements_Γ², :t₁=>0.0, :t₂=>P, :t₃=>0.0)
 𝑏₃ = ∫vᵢtᵢdΓ => elements_Γ²
-f = zeros(6nₚ)
-𝑏₃(f)
-f .+= fα
-d₂ = 𝐤ᵦ \ f
+fᵘ = zeros(3nₚ)
+𝑏₃(fᵘ)
+f = [fᵘ .+ fᵘα; fᵠα]
+d₂ = 𝐊 \ f
 
 # ===================== 7. 整梁精确解 =====================
 # 悬臂梁（x=0 固定，x=L 自由），Timoshenko：弯曲 + 剪切

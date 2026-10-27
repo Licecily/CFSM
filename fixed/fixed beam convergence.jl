@@ -1,6 +1,6 @@
 using ApproxOperator
 import ApproxOperator.GmshImport: getPhysicalGroups, get𝑿ᵢ, getElements
-import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, ∫dᵢgᵢdΓ, L₂d
+import ApproxOperator.Beam: ∫εᵘNᵘdΩ, ∫εᵘNᵠdΩ, ∫εᵠNᵘdΩ, ∫εᵠNᵠdΩ, ∫uᵢgᵢdΓ, ∫φᵢgᵢdΓ, L₂d
 import ApproxOperator.Elasticity: ∫vᵢbᵢdΩ
 import Gmsh: gmsh
 using LinearAlgebra
@@ -77,32 +77,39 @@ function solve_mesh(n)
     𝑎₂(𝐊ᵘᵠ)
     𝑎₃(𝐊ᵠᵘ)
     𝑎₄(𝐊ᵠᵠ)
-    𝐤 = [𝐊ᵘᵘ 𝐊ᵘᵠ; 𝐊ᵠᵘ 𝐊ᵠᵠ]
 
     # 两端固定（齐次罚函数）
     Γ¹ = getElements(nodes, entities["Γ¹"])
     prescribe!(Γ¹, :α=>α, :g₁=>0.0, :g₂=>0.0, :g₃=>0.0,
                           :g₄=>0.0, :g₅=>0.0, :g₆=>0.0)
     set𝝭!(Γ¹)
-    𝑏¹ = ∫dᵢgᵢdΓ => Γ¹
+    𝑏¹ᵘ = ∫uᵢgᵢdΓ => Γ¹
+    𝑏¹ᵠ = ∫φᵢgᵢdΓ => Γ¹
 
     Γ² = getElements(nodes, entities["Γ²"])
     prescribe!(Γ², :α=>α, :g₁=>0.0, :g₂=>0.0, :g₃=>0.0,
                           :g₄=>0.0, :g₅=>0.0, :g₆=>0.0)
     set𝝭!(Γ²)
-    𝑏² = ∫dᵢgᵢdΓ => Γ²
+    𝑏²ᵘ = ∫uᵢgᵢdΓ => Γ²
+    𝑏²ᵠ = ∫φᵢgᵢdΓ => Γ²
 
-    𝐤ᵦ = copy(𝐤)
-    f  = zeros(6nₚ)
-    𝑏¹(𝐤ᵦ, f)
-    𝑏²(𝐤ᵦ, f)
+    𝐊ᵘᵘα = zeros(3nₚ, 3nₚ)
+    𝐊ᵠᵠα = zeros(3nₚ, 3nₚ)
+    fᵘα = zeros(3nₚ)
+    fᵠα = zeros(3nₚ)
+    𝑏¹ᵘ(𝐊ᵘᵘα, fᵘα); 𝑏¹ᵠ(𝐊ᵠᵠα, fᵠα)
+    𝑏²ᵘ(𝐊ᵘᵘα, fᵘα); 𝑏²ᵠ(𝐊ᵠᵠα, fᵠα)
+    𝐊 = [𝐊ᵘᵘ + 𝐊ᵘᵘα  𝐊ᵘᵠ;
+          𝐊ᵠᵘ          𝐊ᵠᵠ + 𝐊ᵠᵠα]
 
     # 均布荷载
     prescribe!(elements, :b₁=>0.0, :b₂=>q, :b₃=>0.0)
     𝑏q = ∫vᵢbᵢdΩ => elements
-    𝑏q(f)
+    fᵘ = zeros(3nₚ)
+    𝑏q(fᵘ)
+    f = [fᵘ .+ fᵘα; fᵠα]
 
-    d = 𝐤ᵦ \ f
+    d = 𝐊 \ f
 
     # 有限元解写回节点，供 L₂d 读取（d₁..d₃ = u₁..u₃，d₄..d₆ = φ₁..φ₃）
     push!(nodes,
